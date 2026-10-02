@@ -74,3 +74,30 @@ func TestRequestIDPropagated(t *testing.T) {
 		t.Fatal("missing X-Request-ID")
 	}
 }
+
+func TestLogoutRevokes(t *testing.T) {
+	s := newServer().WithDemoLogin(true)
+	req := httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(`{"username":"admin","password":"secret"}`))
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != 200 {
+		t.Fatalf("login: %d", rec.Code)
+	}
+	tok := strings.Split(strings.Split(rec.Body.String(), `"token":"`)[1], `"`)[0]
+	// logout
+	reqL := httptest.NewRequest("POST", "/api/v1/auth/logout", nil)
+	reqL.Header.Set("Authorization", "Bearer "+tok)
+	recL := httptest.NewRecorder()
+	s.Handler().ServeHTTP(recL, reqL)
+	if recL.Code != 200 {
+		t.Fatalf("logout: %d %s", recL.Code, recL.Body.String())
+	}
+	// token must now be rejected
+	req2 := httptest.NewRequest("GET", "/api/v1/customers", nil)
+	req2.Header.Set("Authorization", "Bearer "+tok)
+	rec2 := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked token must 401, got %d", rec2.Code)
+	}
+}

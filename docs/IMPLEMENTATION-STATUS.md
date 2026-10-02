@@ -55,14 +55,23 @@ Nothing claims VERIFIED. Evidence-gated promotion only (see matrix evidence fiel
 ## REQUIRES VENDOR ACCESS — 8 cloud families (Ruijie, Reyee, UniFi, Omada,
 ## Meraki, Aruba Central, Mist, cnMaestro).
 
-## KNOWN LIMITATIONS
+## KNOWN LIMITATIONS (updated 2026-10-02)
 - `go test -race` needs cgo/gcc (unavailable on this Windows box; CI/Linux must run it).
-- No live PostgreSQL/Redis here: DB integration tests gate on `TEST_DATABASE_URL`;
-  migrations are carefully written but NOT executed against a live server yet.
+- Live PostgreSQL 18.3 verified 2026-10-02: migrations 001–006 applied clean,
+  seed + rules present, `TestLivePostgres` passes (`TEST_DATABASE_URL`).
+- Live Redis-compatible (Memurai :6379) verified: SET/GET/DEL, distributed
+  lock (SET NX PX + Lua release/refresh), Streams (XADD/XGROUP/XREADGROUP/
+  XACK + idempotent publish) — `TestLiveRedis/Lock/Stream` pass.
+- `ispctl backup` verified end-to-end (63KB pg_dump of live DB).
+- Measured micro-benchmarks recorded in PERFORMANCE.md (dev box only).
 - Live E2E (MIKROTIK_E2E/RADIUS_E2E/SNMP_E2E) never run — no hardware/agents.
-- OpenAPI file lags new endpoints (`/lab/test`, `/topology`, `/audit`).
-- HA: stateless API + worker-safe queues by design; Redis Streams transport,
-  distributed locks, and multi-instance deployment are documented, not deployed.
+- SNMPv3: authNoPriv (HMAC-MD5/SHA-96, discovery) implemented + round-trip
+  tested; privacy (DES/AES) PLANNED; agent interop pending.
+- Session revocation (jti denylist + logout) implemented; multi-instance
+  Redis backing PLANNED (interface-ready).
+- OpenAPI refreshed to v1.1.0 (all current routes).
+- HA: stateless API + worker-safe queues by design; Redis Streams transport
+  implemented + live-tested; distributed locks live-tested.
 
 ## SECURITY STATUS
 PBKDF2-SHA256 passwords, AES-GCM credential vault, demo login gated

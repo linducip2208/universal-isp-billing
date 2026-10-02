@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -11,6 +14,7 @@ import (
 )
 
 type Claims struct {
+	ID           string   `json:"jti"`
 	Subject      string   `json:"sub"`
 	Organization string   `json:"org,omitempty"`
 	Roles        []string `json:"roles,omitempty"`
@@ -18,10 +22,26 @@ type Claims struct {
 	IssuedAt     int64    `json:"iat"`
 }
 
+type ctxClaimsKey struct{}
+
+// WithClaims carries verified claims (incl. JTI) for logout/revocation.
+func WithClaims(ctx context.Context, c *Claims) context.Context {
+	return context.WithValue(ctx, ctxClaimsKey{}, c)
+}
+
+func ClaimsOf(ctx context.Context) *Claims {
+	c, _ := ctx.Value(ctxClaimsKey{}).(*Claims)
+	return c
+}
+
 // Sign issues an HS256 JWT (stdlib-only, no external deps).
 func Sign(secret, subject, org string, roles []string, ttl time.Duration) (string, error) {
+	var jb [16]byte
+	if _, err := rand.Read(jb[:]); err != nil {
+		return "", err
+	}
 	now := time.Now()
-	c := Claims{Subject: subject, Organization: org, Roles: roles, IssuedAt: now.Unix(), ExpiresAt: now.Add(ttl).Unix()}
+	c := Claims{ID: hex.EncodeToString(jb[:]), Subject: subject, Organization: org, Roles: roles, IssuedAt: now.Unix(), ExpiresAt: now.Add(ttl).Unix()}
 	hb, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
 	pb, _ := json.Marshal(c)
 	enc := func(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }

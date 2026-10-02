@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -44,6 +45,8 @@ func main() {
 		code = runDoctor()
 	case "connector":
 		code = runConnector(os.Args[2:])
+	case "backup":
+		code = runBackup()
 	case "capabilities":
 		code = runCapabilities()
 	case "device":
@@ -65,7 +68,8 @@ func usage() {
   ispctl doctor                      config + dependency diagnostics (no secrets printed)
   ispctl connector list              list registered connectors with status
   ispctl device test                 test a MikroTik device (MT_HOST/MT_USER/MT_PASS)
-  ispctl capabilities                print machine-readable capability matrix (YAML-ish JSON)`)
+  ispctl capabilities                print machine-readable capability matrix (YAML-ish JSON)
+  ispctl backup [file]               pg_dump the database (needs pg_dump + DATABASE_URL)`)
 }
 
 func openStore() *store.Store {
@@ -198,6 +202,30 @@ func runDevice(args []string) int {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return 1
 	}
+	return 0
+}
+
+func runBackup() int {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		fmt.Fprintln(os.Stderr, "backup: DATABASE_URL not set")
+		return 2
+	}
+	out := fmt.Sprintf("isp-backup-%s.sql", time.Now().Format("20060102-150405"))
+	if len(os.Args) > 2 {
+		out = os.Args[2]
+	}
+	if _, err := exec.LookPath("pg_dump"); err != nil {
+		fmt.Fprintln(os.Stderr, "backup: pg_dump not found in PATH")
+		return 1
+	}
+	cmd := exec.Command("pg_dump", url, "-f", out)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "backup failed:", err)
+		return 1
+	}
+	fmt.Println("wrote", out)
 	return 0
 }
 

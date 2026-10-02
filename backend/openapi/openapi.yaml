@@ -1,44 +1,98 @@
 openapi: 3.0.3
 info:
   title: Universal ISP Platform API
-  version: 1.0.0
+  version: 1.1.0
+  description: >
+    Tenant-scoped (`org_id` enforced server-side), RBAC-protected API.
+    Auth: Bearer JWT. Correlation: X-Request-ID (sent + echoed).
+    Lists: ?search=&status=&page=&per_page=&sort=&dir= -> {data,total,page,per_page}.
+    Without a database, data routes answer 503 explicitly (never fake rows).
 servers:
   - url: /api/v1
+security:
+  - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth: {type: http, scheme: bearer, bearerFormat: JWT}
+  parameters:
+    Search: {name: search, in: query, schema: {type: string}}
+    Status: {name: status, in: query, schema: {type: string}}
+    Page: {name: page, in: query, schema: {type: integer, default: 1}}
+    PerPage: {name: per_page, in: query, schema: {type: integer, default: 25, maximum: 100}}
+    Sort: {name: sort, in: query, schema: {type: string}}
+    Dir: {name: dir, in: query, schema: {type: string, enum: [asc, desc]}}
 paths:
   /auth/login:
     post:
-      summary: Login
+      summary: Login (PBKDF2 users table; demo only with ISP_DEMO_LOGIN=1)
+      security: []
       requestBody:
         content:
           application/json:
             schema:
               type: object
+              required: [username, password]
               properties:
                 username: {type: string}
                 password: {type: string}
       responses:
-        '200': {description: OK}
+        '200': {description: '{token,user,must_rotate_password}'}
+        '401': {description: invalid credentials}
+        '429': {description: login throttled}
+  /auth/logout:
+    post:
+      summary: Revoke current token (jti denylist)
+      responses:
+        '200': {description: logged out}
+        '401': {description: invalid token}
   /customers:
-    get: {summary: List customers, responses: {'200': {description: OK}}}
+    get: {summary: List customers (tenant-scoped), parameters: [{$ref: '#/components/parameters/Search'}, {$ref: '#/components/parameters/Status'}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PerPage'}, {$ref: '#/components/parameters/Sort'}, {$ref: '#/components/parameters/Dir'}], responses: {'200': {description: paged list}, '503': {description: database not configured}}}
   /subscriptions:
-    get: {summary: List subscriptions, responses: {'200': {description: OK}}}
+    get: {summary: List subscriptions, parameters: [{$ref: '#/components/parameters/Search'}, {$ref: '#/components/parameters/Status'}, {$ref: '#/components/parameters/Page'}, {$ref: '#/components/parameters/PerPage'}], responses: {'200': {description: paged list}}}
   /packages:
-    get: {summary: List packages, responses: {'200': {description: OK}}}
+    get: {summary: List packages, responses: {'200': {description: paged list}}}
   /invoices:
-    get: {summary: List invoices, responses: {'200': {description: OK}}}
+    get: {summary: List invoices, responses: {'200': {description: paged list}}}
   /payments:
-    get: {summary: List payments, responses: {'200': {description: OK}}}
+    get: {summary: List payments, responses: {'200': {description: paged list}}}
   /devices:
-    get: {summary: List devices, responses: {'200': {description: OK}}}
+    get: {summary: List devices, responses: {'200': {description: paged list}}}
+  /sites:
+    get: {summary: List sites, responses: {'200': {description: paged list}}}
   /connectors:
-    get: {summary: List connectors, responses: {'200': {description: OK}}}
+    get: {summary: List registered connectors (identity cards, no secrets), responses: {'200': {description: OK}}}
   /noc/summary:
-    get: {summary: NOC summary, responses: {'200': {description: OK}}}
+    get: {summary: Live NOC aggregates from inventory, responses: {'200': {description: counts}, '503': {description: database not configured}}}
+  /reports/summary:
+    get: {summary: Alias of NOC aggregates, responses: {'200': {description: counts}}}
   /provisioning/jobs:
-    get: {summary: Provisioning jobs, responses: {'200': {description: OK}}}
-  /monitoring/devices:
-    get: {summary: Device monitoring, responses: {'200': {description: OK}}}
+    get: {summary: List network jobs, responses: {'200': {description: paged list}}}
   /alerts:
-    get: {summary: Alerts, responses: {'200': {description: OK}}}
+    get: {summary: List alerts, responses: {'200': {description: paged list}}}
+  /events:
+    get: {summary: List events, responses: {'200': {description: paged list}}}
+  /audit:
+    get: {summary: List audit logs (system admin), responses: {'200': {description: paged list}}}
+  /topology:
+    get: {summary: Topology graph from inventory, responses: {'200': {description: '{nodes,edges}'}}}
+  /lab/test:
+    post:
+      summary: Connection Lab test + capability discovery (credentials request-scoped, never stored)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vendor, family, connection_type]
+              properties:
+                vendor: {type: string}
+                family: {type: string}
+                connection_type: {type: string, enum: [cli, rest, cloud_api, restconf, netconf, ssh, radius, snmp, webhook, generic_http]}
+                config: {type: object, additionalProperties: {type: string}}
+      responses:
+        '200': {description: '{healthy,result,error?}'}
+        '404': {description: unknown connector}
   /vendor-matrix:
-    get: {summary: Vendor matrix, responses: {'200': {description: OK}}}
+    get: {summary: Vendor matrix (registry descriptors), responses: {'200': {description: OK}}}
+  /system/settings:
+    get: {summary: System settings (system admin), responses: {'200': {description: OK}}}

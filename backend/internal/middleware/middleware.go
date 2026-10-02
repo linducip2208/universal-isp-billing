@@ -80,10 +80,10 @@ func CORS(allowed []string) func(http.Handler) http.Handler {
 	}
 }
 
-func JWT(secret string) func(http.Handler) http.Handler {
+func JWT(secret string, revoker auth.Revoker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api/v1/auth/") || r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/live" || r.URL.Path == "/metrics" {
+			if r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/live" || r.URL.Path == "/metrics" {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -97,8 +97,13 @@ func JWT(secret string) func(http.Handler) http.Handler {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
+			if revoker != nil && revoker.Revoked(cl.ID) {
+				http.Error(w, `{"error":"token revoked"}`, http.StatusUnauthorized)
+				return
+			}
 			ctx := rbac.WithRoles(r.Context(), cl.Roles)
 			ctx = rbac.WithOrg(ctx, cl.Organization)
+			ctx = auth.WithClaims(ctx, cl)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -3,43 +3,51 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/universal-isp/platform/internal/security"
 )
 
 // Authenticate verifies username/password against users + roles.
 // Passwords are PBKDF2 hashes; timing-safe compare inside security.
-func (s *Store) Authenticate(ctx context.Context, username, password string) (userID, orgID string, roles []string, err error) {
+// rotate=true when the password is older than the 90-day rotation policy.
+// last_login_at is updated on success (best effort, never fails auth).
+func (s *Store) Authenticate(ctx context.Context, username, password string) (userID, orgID string, roles []string, rotate bool, err error) {
 	if s == nil || s.db == nil {
-		return "", "", nil, ErrNoDatabase
+		return "", "", nil, false, ErrNoDatabase
 	}
 	var hash string
+	var changedAt *time.Time
 	err = s.db.QueryRowContext(ctx,
-		`SELECT id, org_id, password_hash FROM users WHERE username = $1 AND deleted_at IS NULL`,
-		username).Scan(&userID, &orgID, &hash)
+		`SELECT id, org_id, password_hash, password_changed_at FROM users WHERE username = $1 AND deleted_at IS NULL`,
+		username).Scan(&userID, &orgID, &hash, &changedAt)
 	if err == sql.ErrNoRows {
-		return "", "", nil, sql.ErrNoRows
+		return "", "", nil, false, sql.ErrNoRows
 	}
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, false, err
 	}
 	if err := security.VerifyPassword(password, hash); err != nil {
-		return "", "", nil, err
+		return "", "", nil, false, err
 	}
+	if changedAt == nil || time.Since(*changedAt) > 90*24*time.Hour {
+		rotate = true
+	}
+	_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, userID)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = $1`, userID)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", nil, rotate, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return "", "", nil, err
+			return "", "", nil, rotate, err
 		}
 		roles = append(roles, name)
 	}
-	return userID, orgID, roles, rows.Err()
+	return userID, orgID, roles, rotate, rows.Err()
 }
 
 // NOCSummary holds real aggregate counts for the NOC dashboard.

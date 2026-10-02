@@ -22,13 +22,14 @@ type Server struct {
 	jwtSecret   string
 	health      *health.Checker
 	store       *store.Store
+	revoker     *auth.MemoryRevoker
 	demoLogin   bool
 	corsOrigins []string
 	throttle    *loginThrottle
 }
 
 func New(log *slog.Logger, jwtSecret string, h *health.Checker) *Server {
-	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle()}
+	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle(), revoker: auth.NewMemoryRevoker()}
 	h.Register(s.mux)
 	s.routes()
 	return s
@@ -44,7 +45,7 @@ func (s *Server) Handler() http.Handler {
 		middleware.CORS(s.corsOrigins),
 		middleware.Logging(s.log),
 		middleware.RateLimit(300, time.Minute),
-		middleware.JWT(s.jwtSecret),
+		middleware.JWT(s.jwtSecret, s.revoker),
 	)
 }
 
@@ -56,6 +57,7 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/auth/login", s.handleLogin)
+	s.mux.HandleFunc("/api/v1/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/v1/connectors", s.handleConnectors)
 	s.mux.HandleFunc("/api/v1/noc/summary", s.handleNOC)
 	s.mux.HandleFunc("/api/v1/vendor-matrix", s.handleMatrix)
@@ -98,7 +100,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// Production path: verify against users table (PBKDF2 hash + roles).
 	if s.store != nil {
-		_, org, roles, err := s.store.Authenticate(r.Context(), body.Username, body.Password)
+		_, org, roles, rotate, err := s.store.Authenticate(r.Context(), body.Username, body.Password)
 		if err != nil {
 			writeJSON(w, 401, map[string]string{"error": "invalid credentials"})
 			return
@@ -107,7 +109,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			roles = []string{"viewer"}
 		}
 		tok, _ := auth.Sign(s.jwtSecret, body.Username, org, roles, 12*time.Hour)
-		writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username})
+		writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username, "must_rotate_password": rotate})
 		return
 	}
 	// Demo path: ONLY when explicitly enabled (ISP_DEMO_LOGIN=1). Refused otherwise.
@@ -118,6 +120,24 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	s.log.Warn("demo login used — enable only for local development")
 	tok, _ := auth.Sign(s.jwtSecret, body.Username, "demo-isp", []string{"superadmin"}, 12*time.Hour)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username})
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cl := auth.ClaimsOf(r.Context())
+	if cl == nil {
+		writeJSON(w, 401, map[string]string{"error": "invalid token"})
+		return
+	}
+	ttl := time.Until(time.Unix(cl.ExpiresAt, 0))
+	if ttl < 0 {
+		ttl = 0
+	}
+	s.revoker.Revoke(cl.ID, ttl)
+	writeJSON(w, 200, map[string]string{"status": "logged out"})
 }
 
 func (s *Server) handleConnectors(w http.ResponseWriter, r *http.Request) {
