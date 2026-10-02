@@ -112,7 +112,7 @@ func CORS(allowed []string) func(http.Handler) http.Handler {
 func JWT(secret string, revoker auth.Revoker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/live" || r.URL.Path == "/metrics" {
+			if r.URL.Path == "/api/v1/auth/login" || r.URL.Path == "/api/v1/auth/mfa/verify" || r.URL.Path == "/health" || r.URL.Path == "/ready" || r.URL.Path == "/live" || r.URL.Path == "/metrics" {
 				next.ServeHTTP(w, r)
 				return
 			}

@@ -10,13 +10,24 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/universal-isp/platform/internal/security"
 )
 
 var ErrNoDatabase = errors.New("database not configured")
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db      *sql.DB
+	Secrets *security.SecretsBox // nullable; required for TOTP verify (decrypts totp_secret_enc)
+}
 
 func New(db *sql.DB) *Store { return &Store{db: db} }
+
+// WithSecrets attaches the credential vault (AES-GCM) for secret decryption.
+func (s *Store) WithSecrets(box *security.SecretsBox) *Store {
+	s.Secrets = box
+	return s
+}
 
 type Query struct {
 	Search  string

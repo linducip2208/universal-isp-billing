@@ -81,6 +81,7 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/auth/login", s.handleLogin)
+	s.mux.HandleFunc("/api/v1/auth/mfa/verify", s.handleMFAVerify)
 	s.mux.HandleFunc("/api/v1/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/v1/connectors", s.handleConnectors)
 	s.mux.HandleFunc("/api/v1/noc/summary", s.handleNOC)
@@ -142,7 +143,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// Production path: verify against users table (PBKDF2 hash + roles).
 	if s.store != nil {
-		_, org, roles, rotate, err := s.store.Authenticate(r.Context(), body.Username, body.Password)
+		_, org, roles, rotate, mfaRequired, err := s.store.Authenticate(r.Context(), body.Username, body.Password)
 		if err != nil {
 			fail()
 			return
@@ -150,6 +151,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.bf.Reset(bfKey)
 		if len(roles) == 0 {
 			roles = []string{"viewer"}
+		}
+		if mfaRequired {
+			challenge, _ := auth.SignScoped(s.jwtSecret, body.Username, org, roles, "mfa-pending", 5*time.Minute)
+			writeJSON(w, 202, map[string]any{"mfa_required": true, "challenge": challenge})
+			return
 		}
 		tok, _ := auth.Sign(s.jwtSecret, body.Username, org, roles, 12*time.Hour)
 		writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username, "must_rotate_password": rotate})
@@ -182,6 +188,43 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.revoker.Revoke(cl.ID, ttl)
 	writeJSON(w, 200, map[string]string{"status": "logged out"})
+}
+
+// handleMFAVerify exchanges a 5-minute mfa-pending challenge + TOTP code
+// for a full session token. The challenge authorizes ONLY this endpoint.
+func (s *Server) handleMFAVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var body struct {
+		Challenge string `json:"challenge"`
+		Code      string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Challenge == "" || body.Code == "" {
+		writeJSON(w, 400, map[string]string{"error": "challenge and code required"})
+		return
+	}
+	cl, err := auth.Verify(s.jwtSecret, body.Challenge)
+	if err != nil || cl.Scope != "mfa-pending" {
+		writeJSON(w, 401, map[string]string{"error": "invalid challenge"})
+		return
+	}
+	if s.store == nil {
+		writeJSON(w, 503, map[string]string{"error": "mfa requires database"})
+		return
+	}
+	if err := s.store.VerifyTOTP(r.Context(), cl.Subject, body.Code); err != nil {
+		if _, blocked := s.bf.Fail("mfa:" + r.RemoteAddr + ":" + cl.Subject); blocked {
+			middleware.Error(w, http.StatusTooManyRequests, "too many mfa attempts", r.Header.Get("X-Request-ID"))
+			return
+		}
+		writeJSON(w, 401, map[string]string{"error": "invalid totp code"})
+		return
+	}
+	s.bf.Reset("mfa:" + r.RemoteAddr + ":" + cl.Subject)
+	tok, _ := auth.Sign(s.jwtSecret, cl.Subject, cl.Organization, cl.Roles, 12*time.Hour)
+	writeJSON(w, 200, map[string]any{"token": tok, "user": cl.Subject})
 }
 
 func (s *Server) handleConnectors(w http.ResponseWriter, r *http.Request) {

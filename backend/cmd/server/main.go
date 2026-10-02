@@ -18,6 +18,7 @@ import (
 	"github.com/universal-isp/platform/internal/health"
 	"github.com/universal-isp/platform/internal/httpapi"
 	"github.com/universal-isp/platform/internal/logger"
+	"github.com/universal-isp/platform/internal/security"
 	"github.com/universal-isp/platform/internal/store"
 )
 
@@ -64,6 +65,16 @@ func main() {
 			os.Exit(1)
 		}
 		st = store.New(db)
+	}
+	if key := os.Getenv("SECRETS_KEY"); key != "" && st != nil {
+		if raw, err := security.DeriveKey(key); err == nil {
+			if box, err := security.NewSecretsBox(raw); err == nil {
+				st.WithSecrets(box)
+				log.Info("secrets vault attached (mfa + credential decryption enabled)")
+			} else {
+				log.Warn("bad SECRETS_KEY length — vault disabled")
+			}
+		}
 	}
 	srv := httpapi.New(log, cfg.JWTSecret, &health.Checker{RedisAddr: cfg.RedisAddr}).WithStore(st)
 	if rc := tryRedis(cfg.RedisAddr); rc != nil {

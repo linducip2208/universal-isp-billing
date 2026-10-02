@@ -3,51 +3,100 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 
+	"github.com/universal-isp/platform/internal/mfa"
 	"github.com/universal-isp/platform/internal/security"
 )
 
 // Authenticate verifies username/password against users + roles.
-// Passwords are PBKDF2 hashes; timing-safe compare inside security.
-// rotate=true when the password is older than the 90-day rotation policy.
-// last_login_at is updated on success (best effort, never fails auth).
-func (s *Store) Authenticate(ctx context.Context, username, password string) (userID, orgID string, roles []string, rotate bool, err error) {
+// Returns rotate (90-day policy) and mfaRequired (TOTP enrolled).
+func (s *Store) Authenticate(ctx context.Context, username, password string) (userID, orgID string, roles []string, rotate, mfaRequired bool, err error) {
 	if s == nil || s.db == nil {
-		return "", "", nil, false, ErrNoDatabase
+		return "", "", nil, false, false, ErrNoDatabase
 	}
 	var hash string
 	var changedAt *time.Time
+	var totpEnabled bool
 	err = s.db.QueryRowContext(ctx,
-		`SELECT id, org_id, password_hash, password_changed_at FROM users WHERE username = $1 AND deleted_at IS NULL`,
-		username).Scan(&userID, &orgID, &hash, &changedAt)
+		`SELECT id, org_id, password_hash, password_changed_at, COALESCE(totp_enabled,false) FROM users WHERE username = $1 AND deleted_at IS NULL`,
+		username).Scan(&userID, &orgID, &hash, &changedAt, &totpEnabled)
 	if err == sql.ErrNoRows {
-		return "", "", nil, false, sql.ErrNoRows
+		return "", "", nil, false, false, sql.ErrNoRows
 	}
 	if err != nil {
-		return "", "", nil, false, err
+		return "", "", nil, false, false, err
 	}
 	if err := security.VerifyPassword(password, hash); err != nil {
-		return "", "", nil, false, err
+		return "", "", nil, false, false, err
 	}
 	if changedAt == nil || time.Since(*changedAt) > 90*24*time.Hour {
 		rotate = true
 	}
+	mfaRequired = totpEnabled
 	_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, userID)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id = r.id WHERE ur.user_id = $1`, userID)
 	if err != nil {
-		return "", "", nil, rotate, err
+		return "", "", nil, rotate, mfaRequired, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			return "", "", nil, rotate, err
+			return "", "", nil, rotate, mfaRequired, err
 		}
 		roles = append(roles, name)
 	}
-	return userID, orgID, roles, rotate, rows.Err()
+	return userID, orgID, roles, rotate, mfaRequired, rows.Err()
+}
+
+// VerifyTOTP checks a 6-digit code (or single-use backup code) for a
+// TOTP-enrolled user. The secret is AES-GCM-encrypted at rest and decrypted
+// only here, in memory, per attempt. A consumed backup code is marked used.
+func (s *Store) VerifyTOTP(ctx context.Context, username, code string) error {
+	if s == nil || s.db == nil {
+		return ErrNoDatabase
+	}
+	if s.Secrets == nil {
+		return errors.New("mfa vault unavailable")
+	}
+	var userID, enc string
+	var enabled bool
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, totp_secret_enc, totp_enabled FROM users WHERE username=$1 AND deleted_at IS NULL`,
+		username).Scan(&userID, &enc, &enabled)
+	if err != nil {
+		return err
+	}
+	if !enabled || enc == "" {
+		return errors.New("totp not enrolled")
+	}
+	if secret, err := s.Secrets.Decrypt(enc); err == nil {
+		if mfa.Verify(secret, code, time.Now(), 1) {
+			return nil
+		}
+	} else {
+		return errors.New("totp vault failure")
+	}
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, code_hash FROM totp_backup_codes WHERE user_id=$1 AND used_at IS NULL`, userID)
+	if err != nil {
+		return errors.New("invalid totp code")
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, h string
+		if err := rows.Scan(&id, &h); err != nil {
+			continue
+		}
+		if mfa.VerifyBackupCode(code, []string{h}) {
+			_, _ = s.db.ExecContext(ctx, `UPDATE totp_backup_codes SET used_at=now() WHERE id=$1`, id)
+			return nil
+		}
+	}
+	return errors.New("invalid totp code")
 }
 
 // NOCSummary holds real aggregate counts for the NOC dashboard.

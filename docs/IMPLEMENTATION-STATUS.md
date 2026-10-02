@@ -20,6 +20,14 @@ httpapi,middleware,events,jobs,workers,health,security,i18n,notify,audit,databas
 Single shared connector registry (`connectors/all`) for API + CLI.
 
 ## IMPLEMENTED FEATURES (with tests)
+- MFA TOTP (2026-10-02): RFC 6238 vectors pass, backup codes (hashed,
+  single-use), encrypted secret at rest (migration 010, applied live),
+  pre-auth challenge flow (`/auth/mfa/verify`, 5-min scoped token),
+  brute-forced MFA attempts rate-limited; live DB test green.
+- CI: GitHub Actions (Linux + gcc + Postgres 16 + Redis 7 services) running
+  migrations, gofmt/vet/build/test/test-race, frontend lint/test/build.
+- Rollback: `.down.sql` for every migration (009 cycle verified live);
+  scheduler systemd unit; logrotate config.
 - Security hardening (2026-10-02): Redis-backed jti revocation
   (`auth.RedisRevoker`, auto-enabled when Redis answers, memory fallback),
   distributed brute-force counters (`bruteforce` memory+Redis, wired into
