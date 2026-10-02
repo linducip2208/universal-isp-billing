@@ -1,4 +1,5 @@
-export type Lang = 'en' | 'id'
+export type Lang = 'en' | 'id' | 'ar'
+export const dirOf = (l: Lang): 'ltr' | 'rtl' => (l === 'ar' ? 'rtl' : 'ltr')
 export const en: Record<string, string> = {
   'nav.dashboard': 'Dashboard', 'nav.noc': 'NOC', 'nav.customers': 'Customers',
   'nav.billing': 'Billing', 'nav.network': 'Network', 'nav.services': 'Services',
@@ -30,4 +31,18 @@ export const id: Record<string, string> = {
   'matrix.title': 'Matriks Kapabilitas Vendor', 'matrix.status': 'Status',
   'noc.live': 'Live (poll 5 dtk)', 'noc.offline': 'API offline — menampilkan data demo',
   'conn.title': 'Konektor',
+}
+// Arabic core coverage (RTL). Covers navigation + common actions; remaining
+// keys fall back to English by design (see translate()).
+export const ar: Record<string, string> = {
+  'nav.dashboard': 'لوحة القيادة', 'nav.noc': 'مركز العمليات', 'nav.customers': 'العملاء',
+  'nav.billing': 'الفوترة', 'nav.network': 'الشبكة', 'nav.services': 'الخدمات',
+  'nav.monitoring': 'المراقبة', 'noc.title': 'مركز عمليات الشبكة',
+  'billing.invoices': 'الفواتير', 'billing.payments': 'المدفوعات',
+  'common.search': 'بحث', 'common.save': 'حفظ', 'common.status': 'الحالة',
+  'common.actions': 'إجراءات', 'common.cancel': 'إلغاء', 'common.test': 'اختبار الاتصال',
+  'auth.login': 'تسجيل الدخول', 'auth.username': 'اسم المستخدم', 'auth.password': 'كلمة المرور',
+  'auth.logout': 'تسجيل الخروج',
+  'lab.title': 'مختبر الاتصال', 'matrix.title': 'مصفوفة قدرات الموردين',
+  'conn.title': 'الموصلات',
 }

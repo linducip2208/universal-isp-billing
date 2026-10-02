@@ -42,3 +42,14 @@ func TestRoleGate(t *testing.T) {
 		t.Fatal("viewer must be refused")
 	}
 }
+
+func TestToolRouting(t *testing.T) {
+	o := copilot.New(fakeTool{"economics_summary", "mrr=100"}, fakeTool{"billing_status", "no overdue"})
+	ans, err := o.Ask(context.Background(), []string{"admin"}, "what is mrr and are invoices overdue?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ans.Evidence) != 2 {
+		t.Fatalf("both tools must fire: %+v", ans.Evidence)
+	}
+}

@@ -87,6 +87,22 @@ func (o *Orchestrator) Ask(ctx context.Context, roles []string, question string)
 			}
 		}
 	}
+	if strings.Contains(low, "revenue") || strings.Contains(low, "mrr") || strings.Contains(low, "arpu") || strings.Contains(low, "churn") || strings.Contains(low, "economic") {
+		if t, ok := o.tools["economics_summary"]; ok {
+			ev, err := t.Query(ctx, map[string]string{"q": question})
+			if err == nil {
+				ans.Evidence = append(ans.Evidence, ev...)
+			}
+		}
+	}
+	if strings.Contains(low, "invoice") || strings.Contains(low, "payment") || strings.Contains(low, "billing") || strings.Contains(low, "overdue") {
+		if t, ok := o.tools["billing_status"]; ok {
+			ev, err := t.Query(ctx, map[string]string{"q": question})
+			if err == nil {
+				ans.Evidence = append(ans.Evidence, ev...)
+			}
+		}
+	}
 	if len(ans.Evidence) == 0 {
 		ans.Summary = "no evidence found for this question in connected read tools"
 		return ans, nil

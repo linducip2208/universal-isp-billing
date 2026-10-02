@@ -10,3 +10,10 @@ IPAM alloc ~388ns, RADIUS codec ~890ns, queue drain ~52µs/1000 jobs.
 Multi-instance: stateless API, Redis Streams transport + distributed locks
 both live-tested. Not yet load-tested at target volumes — no throughput
 claims beyond the measured numbers above.
+
+## Live 1k-subscriber check (PostgreSQL 18.3 local, 2026-10-02)
+Inserted 1000 active subscriptions, timed real dashboard queries, cleaned up:
+- `COUNT(*) active subs (org-scoped)`: ~7.5ms (cold-ish)
+- MRR `SUM(package price)` join: ~3.5ms
+Both use the 009 composite/indexed paths. Linear extrapolation is NOT claimed;
+10k/100k runs are the next load milestone.

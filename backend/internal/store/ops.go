@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/universal-isp/platform/internal/economics"
+	"github.com/universal-isp/platform/internal/subscriptions"
 )
 
 // EconomicsSummary computes MRR/ARPU/churn inputs live: MRR = sum of active
@@ -66,4 +68,84 @@ func (s *Store) EconomicsSummary(ctx context.Context, orgID string) (economics.S
 	sum := economics.Summarize(mrrRows, subs)
 	sum.RevenueByPack = byPack
 	return sum, nil
+}
+
+// BulkItem is one per-item bulk result (partial success is explicit).
+type BulkItem struct {
+	ID     string `json:"id"`
+	OK     bool   `json:"ok"`
+	Error  string `json:"error,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
+// BulkSubscriptionStatus applies suspend/activate/terminate to many
+// subscriptions with per-row lifecycle validation. Each row is independent;
+// failures never roll back siblings (caller retries by ID).
+func (s *Store) BulkSubscriptionStatus(ctx context.Context, orgID string, ids []string, action string) ([]BulkItem, error) {
+	if s == nil || s.db == nil {
+		return nil, ErrNoDatabase
+	}
+	var to subscriptions.Status
+	switch action {
+	case "suspend":
+		to = subscriptions.Suspended
+	case "activate":
+		to = subscriptions.Active
+	case "terminate":
+		to = subscriptions.Terminated
+	default:
+		return nil, fmt.Errorf("unknown bulk action %q", action)
+	}
+	out := make([]BulkItem, 0, len(ids))
+	for _, id := range ids {
+		var cur string
+		err := s.db.QueryRowContext(ctx,
+			`SELECT status FROM subscriptions WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL`, orgID, id).Scan(&cur)
+		if err != nil {
+			out = append(out, BulkItem{ID: id, Error: "not found"})
+			continue
+		}
+		sub := &subscriptions.Subscription{Status: subscriptions.Status(cur)}
+		if err := sub.Transition(to); err != nil {
+			out = append(out, BulkItem{ID: id, Error: err.Error(), Status: cur})
+			continue
+		}
+		if _, err := s.db.ExecContext(ctx,
+			`UPDATE subscriptions SET status=$3, updated_at=now() WHERE org_id=$1 AND id=$2`, orgID, id, string(to)); err != nil {
+			out = append(out, BulkItem{ID: id, Error: err.Error(), Status: cur})
+			continue
+		}
+		out = append(out, BulkItem{ID: id, OK: true, Status: string(to)})
+	}
+	return out, nil
+}
+
+// RecordTrafficSample persists one device traffic reading (telemetry writer
+// for the polling loop; partition-ready table). The device must belong to
+// the org (tenant guard on write path too).
+func (s *Store) RecordTrafficSample(ctx context.Context, orgID, deviceID, target string, rxBps, txBps int64) error {
+	if s == nil || s.db == nil {
+		return ErrNoDatabase
+	}
+	var ok bool
+	err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM devices WHERE org_id=$1 AND id=$2 AND deleted_at IS NULL)`, orgID, deviceID).Scan(&ok)
+	if err != nil || !ok {
+		return fmt.Errorf("device not in org")
+	}
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO traffic_samples(device_id, target, rx_bps, tx_bps) VALUES($1,$2,$3,$4)`,
+		deviceID, target, rxBps, txBps)
+	return err
+}
+
+// RecordInterfaceSample persists one interface reading.
+func (s *Store) RecordInterfaceSample(ctx context.Context, deviceID, ifname string, rxBps, txBps, errors int64) error {
+	if s == nil || s.db == nil {
+		return ErrNoDatabase
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO interface_samples(device_id, ifname, rx_bps, tx_bps, errors) VALUES($1,$2,$3,$4,$5)`,
+		deviceID, ifname, rxBps, txBps, errors)
+	return err
 }

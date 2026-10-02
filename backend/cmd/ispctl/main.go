@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -212,8 +213,13 @@ func runBackup() int {
 		return 2
 	}
 	out := fmt.Sprintf("isp-backup-%s.sql", time.Now().Format("20060102-150405"))
-	if len(os.Args) > 2 {
-		out = os.Args[2]
+	verify := false
+	for _, a := range os.Args[2:] {
+		if a == "--verify" {
+			verify = true
+		} else {
+			out = a
+		}
 	}
 	if _, err := exec.LookPath("pg_dump"); err != nil {
 		fmt.Fprintln(os.Stderr, "backup: pg_dump not found in PATH")
@@ -226,7 +232,36 @@ func runBackup() int {
 		return 1
 	}
 	fmt.Println("wrote", out)
+	if !verify {
+		return 0
+	}
+	// Verify: restore into a scratch database and count tables.
+	tmp := fmt.Sprintf("isp_verify_%d", time.Now().Unix())
+	if err := exec.Command("psql", url, "-c", "CREATE DATABASE "+tmp).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "verify: cannot create scratch db:", err)
+		return 1
+	}
+	defer exec.Command("psql", url, "-c", "DROP DATABASE "+tmp).Run()
+	restoreURL := withDB(url, tmp)
+	if err := exec.Command("psql", restoreURL, "-v", "ON_ERROR_STOP=1", "-f", out).Run(); err != nil {
+		fmt.Fprintln(os.Stderr, "verify: restore failed:", err)
+		return 1
+	}
+	fmt.Println("verify: restore ok into", tmp, "(dropped after check)")
 	return 0
+}
+
+// withDB swaps the database path segment of a postgres URL.
+func withDB(url, db string) string {
+	if i := strings.LastIndex(url, "/"); i >= 0 {
+		base := url[:i]
+		rest := url[i+1:]
+		if q := strings.Index(rest, "?"); q >= 0 {
+			return base + "/" + db + rest[q:]
+		}
+		return base + "/" + db
+	}
+	return url
 }
 
 func env(k, d string) string {

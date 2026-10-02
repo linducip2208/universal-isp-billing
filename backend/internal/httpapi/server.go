@@ -82,6 +82,8 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/auth/login", s.handleLogin)
 	s.mux.HandleFunc("/api/v1/auth/mfa/verify", s.handleMFAVerify)
+	s.mux.HandleFunc("/api/v1/auth/mfa/enroll", s.handleMFAEnroll)
+	s.mux.HandleFunc("/api/v1/auth/mfa/confirm", s.handleMFAConfirm)
 	s.mux.HandleFunc("/api/v1/auth/logout", s.handleLogout)
 	s.mux.HandleFunc("/api/v1/connectors", s.handleConnectors)
 	s.mux.HandleFunc("/api/v1/noc/summary", s.handleNOC)
@@ -113,6 +115,8 @@ func (s *Server) routes() {
 	s.mux.Handle("/api/v1/economics/summary", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleEconomics)))
 	s.mux.Handle("/api/v1/service-health", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleServiceHealth)))
 	s.mux.Handle("/api/v1/copilot/ask", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleCopilot)))
+	s.mux.Handle("/api/v1/subscriptions/bulk", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleBulkSubs)))
+	s.mux.Handle("/api/v1/crm/leads", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleResource("crm_leads"))))
 	s.mux.Handle("/api/v1/customer-360", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleCustomer360)))
 	s.mux.Handle("/api/v1/incidents/action", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleIncidentAction)))
 	s.mux.Handle("/api/v1/lab/runs", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("lab_runs"))))
@@ -228,6 +232,52 @@ func (s *Server) handleMFAVerify(w http.ResponseWriter, r *http.Request) {
 	s.bf.Reset("mfa:" + r.RemoteAddr + ":" + cl.Subject)
 	tok, _ := auth.Sign(s.jwtSecret, cl.Subject, cl.Organization, cl.Roles, 12*time.Hour)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": cl.Subject})
+}
+
+// handleMFAEnroll starts TOTP enrollment for the authenticated user and
+// returns the one-time secret + otpauth URL (QR payload). Requires auth.
+func (s *Server) handleMFAEnroll(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cl := auth.ClaimsOf(r.Context())
+	if cl == nil || s.store == nil {
+		writeJSON(w, 401, map[string]string{"error": "invalid token"})
+		return
+	}
+	secret, url, err := s.store.EnrollMFA(r.Context(), cl.Subject, "UniversalISP")
+	if err != nil {
+		middleware.Error(w, http.StatusBadGateway, "enroll failed", r.Header.Get("X-Request-ID"))
+		return
+	}
+	writeJSON(w, 200, map[string]string{"secret": secret, "otpauth_url": url})
+}
+
+// handleMFAConfirm enables TOTP after a valid code from the enrolled secret.
+func (s *Server) handleMFAConfirm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	cl := auth.ClaimsOf(r.Context())
+	if cl == nil || s.store == nil {
+		writeJSON(w, 401, map[string]string{"error": "invalid token"})
+		return
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Code == "" {
+		writeJSON(w, 400, map[string]string{"error": "code required"})
+		return
+	}
+	// Confirm against the pending (disabled) enrollment directly.
+	if err := s.store.ConfirmMFA(r.Context(), cl.Subject, body.Code); err != nil {
+		writeJSON(w, 401, map[string]string{"error": "invalid totp code"})
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "totp enabled"})
 }
 
 func (s *Server) handleConnectors(w http.ResponseWriter, r *http.Request) {

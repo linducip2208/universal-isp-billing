@@ -2,6 +2,7 @@ import React, { useContext, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import type { Lang } from './i18n/dict'
+import { dirOf } from './i18n/dict'
 import { LangCtx, translate } from './lang'
 import { Page } from './pages/Page'
 import { Login } from './pages/Login'
@@ -51,7 +52,7 @@ function Shell() {
           {!authed
             ? <Link to="/login">{ctx.t('auth.login')}</Link>
             : <button onClick={logout}>{ctx.t('auth.logout')}</button>}
-          <button onClick={() => ctx.setLang(ctx.lang === 'en' ? 'id' : 'en')}>{ctx.lang === 'en' ? 'ID' : 'EN'}</button>
+          <button onClick={() => ctx.setLang(ctx.lang === 'en' ? 'id' : ctx.lang === 'id' ? 'ar' : 'en')}>{ctx.lang.toUpperCase()}</button>
           <button onClick={() => setDark(!dark)}>{dark ? '☀' : '☾'}</button>
         </header>
         <Routes>
@@ -79,6 +80,10 @@ function Shell() {
 function App() {
   const [lang, setLang] = useState<Lang>('en')
   const t = (k: string) => translate(lang, k)
+  React.useEffect(() => {
+    document.documentElement.dir = dirOf(lang)
+    document.documentElement.lang = lang
+  }, [lang])
   return (
     <LangCtx.Provider value={{ lang, setLang, t }}>
       <HashRouter><Shell /></HashRouter>

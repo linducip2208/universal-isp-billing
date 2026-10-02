@@ -52,7 +52,61 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (us
 	return userID, orgID, roles, rotate, mfaRequired, rows.Err()
 }
 
-// VerifyTOTP checks a 6-digit code (or single-use backup code) for a
+// EnrollMFA generates a TOTP secret for the user, stores it encrypted with
+// totp_enabled=false, and returns the one-time secret + otpauth URL.
+// The plaintext secret is shown exactly once (QR scan); only the ciphertext
+// is persisted.
+func (s *Store) EnrollMFA(ctx context.Context, username, issuer string) (secret, url string, err error) {
+	if s == nil || s.db == nil {
+		return "", "", ErrNoDatabase
+	}
+	if s.Secrets == nil {
+		return "", "", errors.New("mfa vault unavailable")
+	}
+	secret, err = mfa.GenerateSecret()
+	if err != nil {
+		return "", "", err
+	}
+	enc, err := s.Secrets.Encrypt(secret)
+	if err != nil {
+		return "", "", err
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET totp_secret_enc=$2, totp_enabled=false WHERE username=$1 AND deleted_at IS NULL`, username, enc)
+	if err != nil {
+		return "", "", err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return "", "", sql.ErrNoRows
+	}
+	return secret, mfa.OtpauthURL(issuer, username, secret), nil
+}
+
+// ConfirmMFA enables TOTP after the user proves possession with a valid code.
+func (s *Store) ConfirmMFA(ctx context.Context, username, code string) error {
+	if s == nil || s.db == nil {
+		return ErrNoDatabase
+	}
+	if s.Secrets == nil {
+		return errors.New("mfa vault unavailable")
+	}
+	var enc string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT totp_secret_enc FROM users WHERE username=$1 AND deleted_at IS NULL`, username).Scan(&enc)
+	if err != nil || enc == "" {
+		return errors.New("no pending enrollment")
+	}
+	secret, err := s.Secrets.Decrypt(enc)
+	if err != nil {
+		return errors.New("totp vault failure")
+	}
+	if !mfa.Verify(secret, code, time.Now(), 1) {
+		return errors.New("invalid totp code")
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE users SET totp_enabled=true WHERE username=$1`, username)
+	return err
+}
+
 // TOTP-enrolled user. The secret is AES-GCM-encrypted at rest and decrypted
 // only here, in memory, per attempt. A consumed backup code is marked used.
 func (s *Store) VerifyTOTP(ctx context.Context, username, code string) error {
