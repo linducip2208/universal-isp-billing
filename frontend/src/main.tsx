@@ -10,6 +10,7 @@ import { Connectors, Matrix } from './pages/Connectors'
 import { Lab } from './pages/Lab'
 import { Invoices, Payments } from './pages/Billing'
 import { Copilot, ServiceHealth, Economics } from './pages/Ops'
+import { Customer360, DeviceDetail, Incidents } from './pages/Premium'
 import { useLang } from './lang'
 
 const groups: { title: string; items: { to: string; key: string }[] }[] = [
@@ -19,7 +20,7 @@ const groups: { title: string; items: { to: string; key: string }[] }[] = [
   { title: 'NETWORK', items: [{ to: '/devices', key: 'Devices' }, { to: '/connectors', key: 'Connectors' }, { to: '/topology', key: 'Topology' }, { to: '/lab', key: 'Connection Lab' }] },
   { title: 'SERVICES', items: [{ to: '/radius', key: 'RADIUS' }, { to: '/sessions', key: 'Sessions' }, { to: '/vouchers', key: 'Vouchers' }] },
   { title: 'FTTH', items: [{ to: '/olt', key: 'OLT' }, { to: '/onu', key: 'ONU/ONT' }] },
-  { title: 'MONITORING', items: [{ to: '/alerts', key: 'Alerts' }, { to: '/events', key: 'Events' }, { to: '/incidents', key: 'Incidents' }] },
+  { title: 'MONITORING', items: [{ to: '/alerts', key: 'Alerts' }, { to: '/events', key: 'Events' }, { to: '/incidents', key: 'Incidents' }, { to: '/customer360', key: 'Customer 360' }, { to: '/device', key: 'Device Detail' }] },
   { title: 'OPERATIONS', items: [{ to: '/tickets', key: 'Tickets' }, { to: '/health', key: 'Service Health' }, { to: '/economics', key: 'Economics' }, { to: '/copilot', key: 'AI Copilot' }] },
   { title: 'AUTOMATION', items: [{ to: '/provisioning', key: 'Provisioning' }, { to: '/rules', key: 'Rules' }] },
   { title: 'SYSTEM', items: [{ to: '/matrix', key: 'Vendor Matrix' }, { to: '/settings', key: 'Settings' }] },
@@ -64,6 +65,9 @@ function Shell() {
           <Route path="/copilot" element={<Copilot />} />
           <Route path="/health" element={<ServiceHealth />} />
           <Route path="/economics" element={<Economics />} />
+          <Route path="/customer360" element={<Customer360 />} />
+          <Route path="/device" element={<DeviceDetail />} />
+          <Route path="/incidents" element={<Incidents />} />
           <Route path="/" element={<Page k="nav.dashboard" />} />
           <Route path="*" element={<Page k={loc.pathname} />} />
         </Routes>

@@ -113,6 +113,9 @@ func (s *Server) routes() {
 	s.mux.Handle("/api/v1/economics/summary", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleEconomics)))
 	s.mux.Handle("/api/v1/service-health", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleServiceHealth)))
 	s.mux.Handle("/api/v1/copilot/ask", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleCopilot)))
+	s.mux.Handle("/api/v1/customer-360", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleCustomer360)))
+	s.mux.Handle("/api/v1/incidents/action", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleIncidentAction)))
+	s.mux.Handle("/api/v1/lab/runs", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("lab_runs"))))
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -261,6 +264,30 @@ func (s *Server) handleLabTest(w http.ResponseWriter, r *http.Request) {
 	}
 	// NOTE: credentials in body are used for this test only, never logged/stored.
 	res, err := lab.TestAndDiscover(r.Context(), c)
+	// Persist evidence (result only — host saved, credentials never).
+	host := ""
+	if body.Config != nil {
+		host = body.Config["host"]
+		if host == "" {
+			host = body.Config["base_url"]
+		}
+		if host == "" {
+			host = body.Config["target"]
+		}
+	}
+	tester := ""
+	if cl := auth.ClaimsOf(r.Context()); cl != nil {
+		tester = cl.Subject
+	}
+	if s.store != nil {
+		errStr := ""
+		if err != nil {
+			errStr = err.Error()
+		}
+		_, _ = s.store.SaveLabRun(r.Context(), rbac.OrgOf(r.Context()),
+			body.Vendor, body.Family, body.ConnectionType, host,
+			err == nil, res.LatencyMs, res, res.Capabilities, res.Probes, errStr, tester)
+	}
 	if err != nil {
 		writeJSON(w, 200, map[string]any{"healthy": false, "error": err.Error(), "result": res})
 		return
@@ -282,7 +309,7 @@ func (s *Server) handleNOC(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleResource serves tenant-scoped paginated lists:
-// ?search=&status=&page=&per_page=&sort=&dir=
+// ?search=&status=&page=&per_page=&sort=&dir= ; ?id= fetches one row.
 func (s *Server) handleResource(name string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.store == nil {
@@ -290,6 +317,15 @@ func (s *Server) handleResource(name string) func(w http.ResponseWriter, r *http
 			return
 		}
 		q := r.URL.Query()
+		if id := q.Get("id"); id != "" {
+			row, err := s.store.GetByID(r.Context(), rbac.OrgOf(r.Context()), name, id)
+			if err != nil {
+				middleware.Error(w, http.StatusNotFound, "not found", r.Header.Get("X-Request-ID"))
+				return
+			}
+			writeJSON(w, 200, row)
+			return
+		}
 		pg, err := s.store.List(r.Context(), rbac.OrgOf(r.Context()), name, store.Query{
 			Search: q.Get("search"), Status: q.Get("status"),
 			Page: atoi(q.Get("page")), PerPage: atoi(q.Get("per_page")),

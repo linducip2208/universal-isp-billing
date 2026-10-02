@@ -20,6 +20,15 @@ httpapi,middleware,events,jobs,workers,health,security,i18n,notify,audit,databas
 Single shared connector registry (`connectors/all`) for API + CLI.
 
 ## IMPLEMENTED FEATURES (with tests)
+- Commercial depth (2026-10-02): persisted Connection Lab evidence
+  (`lab_runs`, credentials never stored, history API), Customer 360 composer
+  (customer/contacts/addresses/subs/invoices/payments-via-join/tickets),
+  incident ack/assign/resolve API + UI with confirmations, generic desired/
+  actual/drift engine (`stateengine`: 5 drift classes, approval-gated
+  reconcile), FTTH domain (OLT/PON/splitter/ONU, optical diagnosis with
+  cited reasons, vendor-neutral plans, migration 011 applied live),
+  premium pages (Customer360, DeviceDetail, Incidents), `?id=` detail on all
+  resource endpoints.
 - MFA TOTP (2026-10-02): RFC 6238 vectors pass, backup codes (hashed,
   single-use), encrypted secret at rest (migration 010, applied live),
   pre-auth challenge flow (`/auth/mfa/verify`, 5-min scoped token),

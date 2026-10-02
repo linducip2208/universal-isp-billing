@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/universal-isp/platform/internal/auth"
 	"github.com/universal-isp/platform/internal/copilot"
 	"github.com/universal-isp/platform/internal/middleware"
 	"github.com/universal-isp/platform/internal/rbac"
@@ -134,4 +135,53 @@ func (s *Server) handleServiceHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRadiusSessions(w http.ResponseWriter, r *http.Request) {
 	s.handleResource("radius_sessions")(w, r)
+}
+
+func (s *Server) handleCustomer360(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		middleware.Error(w, http.StatusServiceUnavailable, "database not configured", r.Header.Get("X-Request-ID"))
+		return
+	}
+	id := r.URL.Query().Get("customer")
+	if id == "" {
+		writeJSON(w, 400, map[string]string{"error": "?customer=<customer-id> required"})
+		return
+	}
+	out, err := s.store.Customer360(r.Context(), rbac.OrgOf(r.Context()), id)
+	if err != nil {
+		middleware.Error(w, http.StatusNotFound, "customer not found", r.Header.Get("X-Request-ID"))
+		return
+	}
+	writeJSON(w, 200, out)
+}
+
+func (s *Server) handleIncidentAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.store == nil {
+		middleware.Error(w, http.StatusServiceUnavailable, "database not configured", r.Header.Get("X-Request-ID"))
+		return
+	}
+	var body struct {
+		ID     string `json:"id"`
+		Action string `json:"action"` // ack | assign | resolve
+		Actor  string `json:"actor"`
+		Extra  string `json:"extra,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" || body.Action == "" {
+		writeJSON(w, 400, map[string]string{"error": "id and action required"})
+		return
+	}
+	if body.Actor == "" {
+		if cl := auth.ClaimsOf(r.Context()); cl != nil {
+			body.Actor = cl.Subject
+		}
+	}
+	if err := s.store.IncidentAction(r.Context(), rbac.OrgOf(r.Context()), body.ID, body.Action, body.Actor, body.Extra); err != nil {
+		middleware.Error(w, http.StatusBadRequest, err.Error(), r.Header.Get("X-Request-ID"))
+		return
+	}
+	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
