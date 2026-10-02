@@ -12,6 +12,10 @@ const ROUTES: Record<string, { api: string; cols: string[] }> = {
   '/events': { api: '/api/v1/events', cols: ['type', 'actor', 'resource'] },
   '/provisioning': { api: '/api/v1/provisioning/jobs', cols: ['kind', 'status', 'attempts'] },
   '/topology': { api: '/api/v1/topology', cols: [] },
+  '/incidents': { api: '/api/v1/incidents', cols: ['title', 'severity', 'status'] },
+  '/tickets': { api: '/api/v1/tickets', cols: ['subject', 'status', 'priority'] },
+  '/sessions': { api: '/api/v1/radius/sessions', cols: ['username', 'nas_ip', 'framed_ip'] },
+  '/contracts': { api: '/api/v1/contracts', cols: ['kind', 'status', 'mrc_cents'] },
 }
 
 export function Page({ k }: { k: string }) {

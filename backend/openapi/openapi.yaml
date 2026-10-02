@@ -94,5 +94,37 @@ paths:
         '404': {description: unknown connector}
   /vendor-matrix:
     get: {summary: Vendor matrix (registry descriptors), responses: {'200': {description: OK}}}
+  /incidents:
+    get: {summary: List incidents, responses: {'200': {description: paged list}}}
+  /tickets:
+    get: {summary: List tickets, responses: {'200': {description: paged list}}}
+  /work-orders:
+    get: {summary: List work orders, responses: {'200': {description: paged list}}}
+  /contracts:
+    get: {summary: List contracts, responses: {'200': {description: paged list}}}
+  /config/snapshots:
+    get: {summary: List config snapshots, responses: {'200': {description: paged list}}}
+  /config/changes:
+    get: {summary: List network changes, responses: {'200': {description: paged list}}}
+  /radius/sessions:
+    get: {summary: List RADIUS online sessions, responses: {'200': {description: paged list}}}
+  /economics/summary:
+    get: {summary: MRR/ARPU/churn summary, responses: {'200': {description: counts}}}
+  /service-health:
+    get: {summary: Per-subscriber health (?subscriber=id), responses: {'200': {description: report}}}
+  /copilot/ask:
+    post:
+      summary: Read-only AI copilot (evidence-cited, never executes)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question: {type: string}
+      responses:
+        '200': {description: '{summary,findings,evidence,recommendations}'}
+        '403': {description: role not permitted}}
   /system/settings:
     get: {summary: System settings (system admin), responses: {'200': {description: OK}}}

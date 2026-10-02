@@ -45,6 +45,7 @@ func (s *Server) Handler() http.Handler {
 		middleware.CORS(s.corsOrigins),
 		middleware.Logging(s.log),
 		middleware.RateLimit(300, time.Minute),
+		middleware.PerOrgRateLimit(600, time.Minute),
 		middleware.JWT(s.jwtSecret, s.revoker),
 	)
 }
@@ -78,6 +79,16 @@ func (s *Server) routes() {
 	s.mux.Handle("/api/v1/system/settings", middleware.Require(rbac.SystemAdmin)(http.HandlerFunc(s.handleSettings)))
 	s.mux.Handle("/api/v1/lab/test", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleLabTest)))
 	s.mux.Handle("/api/v1/topology", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleTopology)))
+	s.mux.Handle("/api/v1/incidents", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("incidents"))))
+	s.mux.Handle("/api/v1/tickets", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleResource("tickets"))))
+	s.mux.Handle("/api/v1/work-orders", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("work_orders"))))
+	s.mux.Handle("/api/v1/contracts", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleResource("contracts"))))
+	s.mux.Handle("/api/v1/config/snapshots", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleResource("config_snapshots"))))
+	s.mux.Handle("/api/v1/config/changes", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleResource("changes"))))
+	s.mux.Handle("/api/v1/radius/sessions", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleRadiusSessions)))
+	s.mux.Handle("/api/v1/economics/summary", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleEconomics)))
+	s.mux.Handle("/api/v1/service-health", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleServiceHealth)))
+	s.mux.Handle("/api/v1/copilot/ask", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleCopilot)))
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,7 @@
-// Package subscriptions implements the subscriber lifecycle:
-// pending -> active -> suspended -> active ... -> terminated.
+// Package subscriptions implements the auditable subscriber lifecycle:
+// prospect -> pending -> provisioning -> active <-> suspended <-> grace ->
+// reactivating -> active ... -> terminated|cancelled, with provision_failed
+// as an explicit failure state. Every transition is explicit.
 package subscriptions
 
 import (
@@ -10,10 +12,16 @@ import (
 type Status string
 
 const (
-	Pending    Status = "pending"
-	Active     Status = "active"
-	Suspended  Status = "suspended"
-	Terminated Status = "terminated"
+	Prospect        Status = "prospect"
+	Pending         Status = "pending"
+	Provisioning    Status = "provisioning"
+	ProvisionFailed Status = "provision_failed"
+	Active          Status = "active"
+	Suspended       Status = "suspended"
+	Grace           Status = "grace"
+	Reactivating    Status = "reactivating"
+	Terminated      Status = "terminated"
+	Cancelled       Status = "cancelled"
 )
 
 type Subscription struct {
@@ -30,29 +38,53 @@ type Subscription struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-func (s *Subscription) Activate() error {
-	if s.Status != Pending && s.Status != Suspended {
-		return errors.New("only pending/suspended subscriptions can activate")
-	}
-	s.Status = Active
-	s.UpdatedAt = time.Now().UTC()
-	return nil
+var transitions = map[Status][]Status{
+	Prospect:        {Pending, Cancelled},
+	Pending:         {Provisioning, Cancelled},
+	Provisioning:    {Active, ProvisionFailed, Cancelled},
+	ProvisionFailed: {Provisioning, Cancelled},
+	Active:          {Suspended, Grace, Terminated, Cancelled},
+	Suspended:       {Reactivating, Grace, Terminated, Cancelled},
+	Grace:           {Reactivating, Suspended, Terminated},
+	Reactivating:    {Provisioning, Active, Suspended},
+	Terminated:      {},
+	Cancelled:       {},
 }
 
-func (s *Subscription) Suspend() error {
-	if s.Status != Active {
-		return errors.New("only active subscriptions can suspend")
+// Transition moves the subscription; illegal moves error (auditable by callers).
+func (s *Subscription) Transition(to Status) error {
+	if s.Status == to {
+		return nil
 	}
-	s.Status = Suspended
-	s.UpdatedAt = time.Now().UTC()
-	return nil
+	for _, ok := range transitions[s.Status] {
+		if ok == to {
+			s.Status = to
+			s.UpdatedAt = time.Now().UTC()
+			return nil
+		}
+	}
+	return errors.New("illegal subscription transition")
 }
+
+func (s *Subscription) Activate() error {
+	if s.Status == Pending || s.Status == Provisioning {
+		return s.Transition(Active)
+	}
+	return s.Transition(Reactivating)
+}
+
+func (s *Subscription) Suspend() error { return s.Transition(Suspended) }
 
 func (s *Subscription) Terminate() error {
 	if s.Status == Terminated {
 		return errors.New("already terminated")
 	}
-	s.Status = Terminated
-	s.UpdatedAt = time.Now().UTC()
-	return nil
+	if s.Status == Cancelled {
+		return errors.New("already cancelled")
+	}
+	// Terminated reachable from most states; cancelled only pre-service.
+	if s.Status == Prospect || s.Status == Pending || s.Status == Provisioning || s.Status == ProvisionFailed {
+		return errors.New("use Cancelled before service, Terminate after")
+	}
+	return s.Transition(Terminated)
 }

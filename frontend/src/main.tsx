@@ -8,6 +8,7 @@ import { NOC } from './pages/NOC'
 import { Connectors, Matrix } from './pages/Connectors'
 import { Lab } from './pages/Lab'
 import { Invoices, Payments } from './pages/Billing'
+import { Copilot, ServiceHealth, Economics } from './pages/Ops'
 
 const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => void } | any>({})
 export const useLang = () => useContext(LangCtx)
@@ -19,7 +20,8 @@ const groups: { title: string; items: { to: string; key: string }[] }[] = [
   { title: 'NETWORK', items: [{ to: '/devices', key: 'Devices' }, { to: '/connectors', key: 'Connectors' }, { to: '/topology', key: 'Topology' }, { to: '/lab', key: 'Connection Lab' }] },
   { title: 'SERVICES', items: [{ to: '/radius', key: 'RADIUS' }, { to: '/sessions', key: 'Sessions' }, { to: '/vouchers', key: 'Vouchers' }] },
   { title: 'FTTH', items: [{ to: '/olt', key: 'OLT' }, { to: '/onu', key: 'ONU/ONT' }] },
-  { title: 'MONITORING', items: [{ to: '/alerts', key: 'Alerts' }, { to: '/events', key: 'Events' }] },
+  { title: 'MONITORING', items: [{ to: '/alerts', key: 'Alerts' }, { to: '/events', key: 'Events' }, { to: '/incidents', key: 'Incidents' }] },
+  { title: 'OPERATIONS', items: [{ to: '/tickets', key: 'Tickets' }, { to: '/health', key: 'Service Health' }, { to: '/economics', key: 'Economics' }, { to: '/copilot', key: 'AI Copilot' }] },
   { title: 'AUTOMATION', items: [{ to: '/provisioning', key: 'Provisioning' }, { to: '/rules', key: 'Rules' }] },
   { title: 'SYSTEM', items: [{ to: '/matrix', key: 'Vendor Matrix' }, { to: '/settings', key: 'Settings' }] },
 ]
@@ -60,6 +62,9 @@ function Shell() {
           <Route path="/lab" element={<Lab />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/payments" element={<Payments />} />
+          <Route path="/copilot" element={<Copilot />} />
+          <Route path="/health" element={<ServiceHealth />} />
+          <Route path="/economics" element={<Economics />} />
           <Route path="/" element={<Page k="nav.dashboard" />} />
           <Route path="*" element={<Page k={loc.pathname} />} />
         </Routes>

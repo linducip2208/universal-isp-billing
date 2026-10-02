@@ -20,6 +20,15 @@ httpapi,middleware,events,jobs,workers,health,security,i18n,notify,audit,databas
 Single shared connector registry (`connectors/all`) for API + CLI.
 
 ## IMPLEMENTED FEATURES (with tests)
+- Operations domain (2026-10-02): incidents + deterministic correlation
+  (child-absorption, severity roll-up), topology impact/paths ("who is
+  affected"), read-only digital twin (failure sim, hot links, headroom),
+  tickets/work-orders state machine, contracts + SLA breach with maintenance
+  exclusions, config snapshots/diffs/approvals/rollback + compliance checks,
+  economics (MRR/ARPU/churn/suspension), z-score/threshold anomaly detectors,
+  read-only AI copilot (role-gated, evidence-cited, exec-refusing),
+  per-subscriber service-health composition, org rate limits, plan
+  entitlements, 10-state subscriber lifecycle, live tenant-isolation tests.
 - Billing: money-as-cents, invoices/discounts/tax/late-fee, recurring generator
   with proration, dunning state machine, reconciliation (over/under/credit/refund),
   invoice numbering (org-scoped transactional), multi-currency validation + FX,

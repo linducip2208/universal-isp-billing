@@ -84,11 +84,21 @@ const (
 	CapClientList    Capability = "client_list"
 )
 
-// Verification is the strict connector/capability status model.
+// Verification is the strict connector/capability status model (12 states).
+// Promotion rule: automated evidence first (AUTOMATED_TESTED), then lab runs
+// (LAB_TESTED), then real devices (REAL_DEVICE_VERIFIED), then production
+// hardening (PRODUCTION_READY). Nothing here is above AUTOMATED_TESTED today.
 type Verification string
 
 const (
-	Verified             Verification = "VERIFIED"
+	ArchitectureReady    Verification = "ARCHITECTURE_READY"
+	Implemented          Verification = "IMPLEMENTED"
+	ProtocolImplemented  Verification = "PROTOCOL_IMPLEMENTED"
+	AutomatedTested      Verification = "AUTOMATED_TESTED"
+	LabTested            Verification = "LAB_TESTED"
+	RealDeviceVerified   Verification = "REAL_DEVICE_VERIFIED"
+	ProductionReady      Verification = "PRODUCTION_READY"
+	Verified             Verification = "VERIFIED" // legacy alias of REAL_DEVICE_VERIFIED
 	Partial              Verification = "PARTIAL"
 	ReadyForCredentials  Verification = "READY_FOR_CREDENTIALS"
 	RequiresVendorAccess Verification = "REQUIRES_VENDOR_ACCESS"

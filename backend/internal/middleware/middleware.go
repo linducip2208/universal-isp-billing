@@ -55,6 +55,35 @@ func Error(w http.ResponseWriter, code int, msg, reqID string) {
 	_, _ = w.Write([]byte(`{"error":"` + msg + `","request_id":"` + reqID + `"}`))
 }
 
+// PerOrgRateLimit enforces per-organization (fallback: per-IP) quotas so one
+// tenant or key cannot starve others. Separate from the global RateLimit.
+func PerOrgRateLimit(n int, win time.Duration) func(http.Handler) http.Handler {
+	type key struct{ org, ip string }
+	var mu sync.Mutex
+	hits := map[key][]time.Time{}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			k := key{org: rbac.OrgOf(r.Context()), ip: r.RemoteAddr}
+			now := time.Now()
+			mu.Lock()
+			var keep []time.Time
+			for _, t := range hits[k] {
+				if now.Sub(t) < win {
+					keep = append(keep, t)
+				}
+			}
+			if len(keep) >= n {
+				mu.Unlock()
+				Error(w, http.StatusTooManyRequests, "organization rate limited", r.Header.Get("X-Request-ID"))
+				return
+			}
+			hits[k] = append(keep, now)
+			mu.Unlock()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // CORS enforces an explicit origin allowlist. Empty allowlist = same-origin
 // only (no ACAO headers emitted).
 func CORS(allowed []string) func(http.Handler) http.Handler {

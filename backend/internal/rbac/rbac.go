@@ -53,6 +53,9 @@ func rolesOf(ctx context.Context) []string {
 	return v
 }
 
+// RolesOf exposes caller roles for services (e.g. copilot permission checks).
+func RolesOf(ctx context.Context) []string { return rolesOf(ctx) }
+
 // Can reports whether any role in ctx grants p.
 func Can(ctx context.Context, p Permission) bool {
 	for _, r := range rolesOf(ctx) {
