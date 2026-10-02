@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/universal-isp/platform/internal/auth"
+	"github.com/universal-isp/platform/internal/bruteforce"
+	"github.com/universal-isp/platform/internal/cache"
 	"github.com/universal-isp/platform/internal/connectors/lab"
 	"github.com/universal-isp/platform/internal/connectors/registry"
 	"github.com/universal-isp/platform/internal/connectors/sdk"
@@ -22,14 +24,15 @@ type Server struct {
 	jwtSecret   string
 	health      *health.Checker
 	store       *store.Store
-	revoker     *auth.MemoryRevoker
+	revoker     auth.Revoker
+	bf          bruteforce.Tracker
 	demoLogin   bool
 	corsOrigins []string
 	throttle    *loginThrottle
 }
 
 func New(log *slog.Logger, jwtSecret string, h *health.Checker) *Server {
-	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle(), revoker: auth.NewMemoryRevoker()}
+	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle(), revoker: auth.NewMemoryRevoker(), bf: bruteforce.NewMemory(10, 15*time.Minute)}
 	h.Register(s.mux)
 	s.routes()
 	return s
@@ -38,6 +41,14 @@ func New(log *slog.Logger, jwtSecret string, h *health.Checker) *Server {
 func (s *Server) WithStore(st *store.Store) *Server { s.store = st; return s }
 func (s *Server) WithDemoLogin(on bool) *Server     { s.demoLogin = on; return s }
 func (s *Server) WithCORS(origins []string) *Server { s.corsOrigins = origins; return s }
+
+// WithRedis upgrades revocation + brute-force tracking to cross-instance
+// Redis state (falls back gracefully per-call if Redis is unreachable).
+func (s *Server) WithRedis(r *cache.Redis) *Server {
+	s.revoker = &auth.RedisRevoker{Do: r.Do}
+	s.bf = &bruteforce.Redis{Do: r.Do, Max: 10, Window: 15 * time.Minute, Prefix: "isp:loginfail:"}
+	return s
+}
 
 func (s *Server) Handler() http.Handler {
 	return middleware.Chain(s.mux,
@@ -109,13 +120,22 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "username and password required"})
 		return
 	}
+	bfKey := "login:" + r.RemoteAddr + ":" + body.Username
+	fail := func() {
+		if _, blocked := s.bf.Fail(bfKey); blocked {
+			middleware.Error(w, http.StatusTooManyRequests, "account temporarily locked (too many failures)", r.Header.Get("X-Request-ID"))
+			return
+		}
+		writeJSON(w, 401, map[string]string{"error": "invalid credentials"})
+	}
 	// Production path: verify against users table (PBKDF2 hash + roles).
 	if s.store != nil {
 		_, org, roles, rotate, err := s.store.Authenticate(r.Context(), body.Username, body.Password)
 		if err != nil {
-			writeJSON(w, 401, map[string]string{"error": "invalid credentials"})
+			fail()
 			return
 		}
+		s.bf.Reset(bfKey)
 		if len(roles) == 0 {
 			roles = []string{"viewer"}
 		}
@@ -125,9 +145,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	// Demo path: ONLY when explicitly enabled (ISP_DEMO_LOGIN=1). Refused otherwise.
 	if !s.demoLogin || !(body.Username == "admin" && body.Password == "secret") {
-		writeJSON(w, 401, map[string]string{"error": "invalid credentials"})
+		fail()
 		return
 	}
+	s.bf.Reset(bfKey)
 	s.log.Warn("demo login used — enable only for local development")
 	tok, _ := auth.Sign(s.jwtSecret, body.Username, "demo-isp", []string{"superadmin"}, 12*time.Hour)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username})

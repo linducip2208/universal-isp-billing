@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState } from 'react'
+import React, { useContext, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
-import { en, id, Lang } from './i18n/dict'
+import type { Lang } from './i18n/dict'
+import { LangCtx, translate } from './lang'
 import { Page } from './pages/Page'
 import { Login } from './pages/Login'
 import { NOC } from './pages/NOC'
@@ -9,9 +10,7 @@ import { Connectors, Matrix } from './pages/Connectors'
 import { Lab } from './pages/Lab'
 import { Invoices, Payments } from './pages/Billing'
 import { Copilot, ServiceHealth, Economics } from './pages/Ops'
-
-const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => void } | any>({})
-export const useLang = () => useContext(LangCtx)
+import { useLang } from './lang'
 
 const groups: { title: string; items: { to: string; key: string }[] }[] = [
   { title: 'DASHBOARD', items: [{ to: '/', key: 'nav.dashboard' }, { to: '/noc', key: 'nav.noc' }] },
@@ -75,7 +74,7 @@ function Shell() {
 
 function App() {
   const [lang, setLang] = useState<Lang>('en')
-  const t = (k: string) => (lang === 'id' ? (id[k] ?? en[k] ?? k) : (en[k] ?? k))
+  const t = (k: string) => translate(lang, k)
   return (
     <LangCtx.Provider value={{ lang, setLang, t }}>
       <HashRouter><Shell /></HashRouter>

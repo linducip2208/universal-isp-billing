@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/universal-isp/platform/internal/cache"
 	"github.com/universal-isp/platform/internal/config"
 	"github.com/universal-isp/platform/internal/connectors/all"
 	"github.com/universal-isp/platform/internal/database"
@@ -23,6 +24,20 @@ import (
 // Connector registration lives in internal/connectors/all (shared by the
 // API server and ispctl so both always agree).
 func registerAll() { all.RegisterAll() }
+
+// tryRedis returns a client only when the server answers (500ms probe).
+func tryRedis(addr string) *cache.Redis {
+	if addr == "" {
+		return nil
+	}
+	rc := cache.NewRedis(addr)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	if _, err := rc.Do(ctx, "PING"); err != nil {
+		return nil
+	}
+	return rc
+}
 
 func main() {
 	cfg := config.Load()
@@ -51,6 +66,10 @@ func main() {
 		st = store.New(db)
 	}
 	srv := httpapi.New(log, cfg.JWTSecret, &health.Checker{RedisAddr: cfg.RedisAddr}).WithStore(st)
+	if rc := tryRedis(cfg.RedisAddr); rc != nil {
+		log.Info("redis reachable — cross-instance revocation + brute-force tracking enabled")
+		srv.WithRedis(rc)
+	}
 	if os.Getenv("ISP_DEMO_LOGIN") == "1" {
 		log.Warn("ISP_DEMO_LOGIN=1 — demo admin/secret login ENABLED (development only)")
 		srv.WithDemoLogin(true)

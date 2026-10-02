@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { useLang } from '../main'
+import { useLang } from '../lang'
 
 function Table({ rows, cols }: { rows: any[]; cols: string[] }) {
   if (!rows.length) return <div className="empty">—</div>
@@ -29,3 +29,4 @@ export function Payments() {
     </div>
   )
 }
+

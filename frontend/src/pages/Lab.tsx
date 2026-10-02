@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { api } from '../api/client'
-import { useLang } from '../main'
+import { useLang } from '../lang'
 
 export function Lab() {
   const ctx: any = useLang()
@@ -46,3 +46,4 @@ export function Lab() {
     </div>
   )
 }
+

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useLang } from '../main'
+import { useLang } from '../lang'
 
 export function Login() {
   const ctx: any = useLang()
@@ -35,3 +35,4 @@ export function Login() {
     </div>
   )
 }
+

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { useLang } from '../main'
+import { useLang } from '../lang'
 
 export function NOC() {
   const ctx: any = useLang()
@@ -61,3 +61,4 @@ export function NOC() {
     </div>
   )
 }
+

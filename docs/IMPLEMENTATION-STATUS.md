@@ -20,6 +20,19 @@ httpapi,middleware,events,jobs,workers,health,security,i18n,notify,audit,databas
 Single shared connector registry (`connectors/all`) for API + CLI.
 
 ## IMPLEMENTED FEATURES (with tests)
+- Security hardening (2026-10-02): Redis-backed jti revocation
+  (`auth.RedisRevoker`, auto-enabled when Redis answers, memory fallback),
+  distributed brute-force counters (`bruteforce` memory+Redis, wired into
+  login: 429 lockout, reset on success) — live-tested vs Memurai.
+- SNMPv3 privacy: AES-128-CFB per RFC 3826 construction (salt/IV documented
+  in code), round-trip + wrong-key + salt-uniqueness tests; agent interop
+  still E2E-gated.
+- CWMP subset (`internal/cwmp`, implements `tr069.ACS`): Inform ingestion,
+  device registry, Get/SetParameterValues + Reboot task queue served as SOAP,
+  honest empty-session handling; fake-CPE tests. Full session/auth/file
+  transfer PLANNED.
+- Frontend: vitest + jsdom + testing-library (4 tests: i18n, Login render);
+  `lang.tsx` split so pages import no app side effects; `npm test` + build green.
 - Operations domain (2026-10-02): incidents + deterministic correlation
   (child-absorption, severity roll-up), topology impact/paths ("who is
   affected"), read-only digital twin (failure sim, hot links, headroom),
