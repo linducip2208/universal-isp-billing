@@ -202,10 +202,16 @@ func (c *RADIUSConnector) GetInterfaces(_ context.Context) ([]sdk.Iface, error) 
 func (c *RADIUSConnector) GetTraffic(_ context.Context, t string) (*sdk.Traffic, error) {
 	return &sdk.Traffic{Target: t, SampledAt: time.Now()}, nil
 }
-func (c *RADIUSConnector) ProvisionSubscriber(_ context.Context, _ sdk.ProvisionRequest) error {
+func (c *RADIUSConnector) ProvisionSubscriber(_ context.Context, req sdk.ProvisionRequest) error {
+	if req.IdempotencyKey == "" {
+		return fmt.Errorf("radius: idempotency key required")
+	}
 	return nil // authorization is enforced at Access-Accept time
 }
 func (c *RADIUSConnector) UpdateSubscriber(_ context.Context, req sdk.UpdateRequest) error {
+	if req.IdempotencyKey == "" {
+		return fmt.Errorf("radius: idempotency key required")
+	}
 	return radius.SendCoA(c.NASAddr, c.Secret, radius.CodeCoARequest, 1, []radius.Attr{{Type: 1, Value: []byte(req.SubscriberID)}}, 5*time.Second)
 }
 func (c *RADIUSConnector) SuspendSubscriber(_ context.Context, id string) error {

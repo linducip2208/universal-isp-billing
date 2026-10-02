@@ -9,10 +9,21 @@ import (
 	"github.com/universal-isp/platform/internal/connectors/sdk"
 )
 
-// Step is one idempotent workflow step.
+// Step is one idempotent workflow step with an optional compensation
+// (rollback action executed in reverse order when a later step fails).
 type Step struct {
-	Name string
-	Run  func(ctx context.Context, w *Workflow) error
+	Name       string
+	Run        func(ctx context.Context, w *Workflow) error
+	Compensate func(ctx context.Context, w *Workflow) error
+}
+
+// RunRecord is the audit trail of one step execution.
+type RunRecord struct {
+	Step     string        `json:"step"`
+	Attempts int           `json:"attempts"`
+	Duration time.Duration `json:"duration_ms"`
+	Result   string        `json:"result"` // ok | failed | compensated
+	Error    string        `json:"error,omitempty"`
 }
 
 type Workflow struct {
@@ -23,6 +34,7 @@ type Workflow struct {
 	Provision      sdk.ProvisionRequest
 	Attempts       map[string]int
 	Events         []string
+	RunLog         []RunRecord
 }
 
 func (w *Workflow) log(format string, args ...any) {
@@ -30,16 +42,54 @@ func (w *Workflow) log(format string, args ...any) {
 }
 
 // Execute runs steps with retry + exponential backoff + timeout per step.
+// Every attempt is recorded in w.RunLog. On failure, compensations of
+// completed steps run in reverse order (rollback), each also recorded.
 func Execute(ctx context.Context, w *Workflow, steps []Step) error {
 	if w.Attempts == nil {
 		w.Attempts = map[string]int{}
 	}
+	var done []Step
 	for _, s := range steps {
+		start := time.Now()
+		rec := RunRecord{Step: s.Name}
 		if err := runStep(ctx, w, s); err != nil {
+			rec.Attempts = w.Attempts[s.Name]
+			rec.Duration = time.Since(start)
+			rec.Result = "failed"
+			rec.Error = err.Error()
+			w.RunLog = append(w.RunLog, rec)
+			w.compensate(ctx, done)
 			return fmt.Errorf("step %s: %w", s.Name, err)
 		}
+		rec.Attempts = w.Attempts[s.Name]
+		rec.Duration = time.Since(start)
+		rec.Result = "ok"
+		w.RunLog = append(w.RunLog, rec)
+		done = append(done, s)
 	}
 	return nil
+}
+
+func (w *Workflow) compensate(ctx context.Context, done []Step) {
+	for i := len(done) - 1; i >= 0; i-- {
+		s := done[i]
+		if s.Compensate == nil {
+			continue
+		}
+		start := time.Now()
+		rec := RunRecord{Step: s.Name + ":compensate", Attempts: 1}
+		cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		err := s.Compensate(cctx, w)
+		cancel()
+		rec.Duration = time.Since(start)
+		if err != nil {
+			rec.Result = "failed"
+			rec.Error = err.Error()
+		} else {
+			rec.Result = "compensated"
+		}
+		w.RunLog = append(w.RunLog, rec)
+	}
 }
 
 func runStep(ctx context.Context, w *Workflow, s Step) error {

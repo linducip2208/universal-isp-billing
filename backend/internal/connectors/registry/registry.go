@@ -36,6 +36,18 @@ func (e Entry) Describe() sdk.Descriptor {
 	}
 }
 
+// Raw returns entries WITH factories intact for in-process harnesses
+// (contract tests, CLI). Never expose factories over the API.
+func Raw() []Entry {
+	mu.RLock()
+	defer mu.RUnlock()
+	out := make([]Entry, 0, len(registry))
+	for _, e := range registry {
+		out = append(out, e)
+	}
+	return out
+}
+
 // Descriptors returns the public identity cards of all registered connectors.
 func Descriptors() []sdk.Descriptor {
 	out := []sdk.Descriptor{}

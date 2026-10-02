@@ -6,11 +6,14 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/universal-isp/platform/internal/metrics"
 )
 
 type Checker struct {
 	DB        *sql.DB
 	RedisAddr string
+	Metrics   *metrics.Registry
 }
 
 func (c *Checker) liveness(w http.ResponseWriter, _ *http.Request) {
@@ -46,7 +49,11 @@ func (c *Checker) readiness(w http.ResponseWriter, r *http.Request) {
 
 func (c *Checker) metrics(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4")
-	_, _ = w.Write([]byte("# HELP isp_uptime_seconds process uptime\n# TYPE isp_uptime_seconds counter\nisp_uptime_seconds 1\n"))
+	if c.Metrics == nil {
+		_, _ = w.Write([]byte("# no metrics registry wired\n"))
+		return
+	}
+	_, _ = w.Write([]byte(c.Metrics.Exposition()))
 }
 
 func (c *Checker) Register(mux *http.ServeMux) {

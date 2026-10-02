@@ -187,6 +187,39 @@ func (s *SessionStore) Stop(id string) {
 	delete(s.m, id)
 }
 
+// Reap removes sessions idle longer than staleAfter (no Start refresh and no
+// recent Interim) and returns them for STOP synthesis / billing closure.
+// Handles: duplicate Start (upserted), Interim-before-Start (created
+// implicitly by accounting path), Stop-unknown (no-op), missing Stop (reaped).
+func (s *SessionStore) Reap(staleAfter time.Duration) []*Session {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	var out []*Session
+	for id, se := range s.m {
+		last := se.LastInterim
+		if last.IsZero() {
+			last = se.StartedAt
+		}
+		if now.Sub(last) > staleAfter {
+			out = append(out, se)
+			delete(s.m, id)
+		}
+	}
+	return out
+}
+
+// TouchOrStart records an Interim for unknown sessions too (out-of-order
+// Interim before Start must not lose usage).
+func (s *SessionStore) TouchOrStart(sess *Session) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[sess.AcctSessionID]; !ok {
+		sess.StartedAt = time.Now()
+		s.m[sess.AcctSessionID] = sess
+	}
+}
+
 func (s *SessionStore) Active() []*Session {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

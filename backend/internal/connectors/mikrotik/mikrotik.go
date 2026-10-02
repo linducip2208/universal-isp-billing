@@ -408,6 +408,9 @@ func (c *Connector) GetTraffic(ctx context.Context, target string) (*sdk.Traffic
 func queueName(sub string) string { return "isp-" + sub }
 
 func (c *Connector) ProvisionSubscriber(ctx context.Context, req sdk.ProvisionRequest) error {
+	if req.IdempotencyKey == "" {
+		return fmt.Errorf("mikrotik: idempotency key required")
+	}
 	rate := fmt.Sprintf("%dM/%dM", req.UploadMbps, req.DownloadMbps)
 	switch req.ServiceType {
 	case "pppoe":

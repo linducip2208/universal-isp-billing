@@ -11,6 +11,7 @@ import (
 	"github.com/universal-isp/platform/internal/connectors/registry"
 	"github.com/universal-isp/platform/internal/connectors/sdk"
 	"github.com/universal-isp/platform/internal/health"
+	"github.com/universal-isp/platform/internal/metrics"
 	"github.com/universal-isp/platform/internal/middleware"
 	"github.com/universal-isp/platform/internal/rbac"
 	"github.com/universal-isp/platform/internal/store"
@@ -27,17 +28,24 @@ type Server struct {
 	revoker     auth.Revoker
 	bf          bruteforce.Tracker
 	glimit      middleware.DoFunc
+	meter       *metrics.Registry
 	demoLogin   bool
 	corsOrigins []string
 	throttle    *loginThrottle
 }
 
 func New(log *slog.Logger, jwtSecret string, h *health.Checker) *Server {
-	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle(), revoker: auth.NewMemoryRevoker(), bf: bruteforce.NewMemory(10, 15*time.Minute)}
+	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle(), revoker: auth.NewMemoryRevoker(), bf: bruteforce.NewMemory(10, 15*time.Minute), meter: metrics.New()}
+	s.meter.Help("http_requests", "API requests by method/route/status")
+	s.meter.Help("http_latency_ms", "API latency milliseconds by method/route")
+	h.Metrics = s.meter
 	h.Register(s.mux)
 	s.routes()
 	return s
 }
+
+// Metrics exposes the registry for /metrics (wired into health.Checker).
+func (s *Server) Metrics() *metrics.Registry { return s.meter }
 
 func (s *Server) WithStore(st *store.Store) *Server { s.store = st; return s }
 func (s *Server) WithDemoLogin(on bool) *Server     { s.demoLogin = on; return s }
@@ -55,6 +63,7 @@ func (s *Server) WithRedis(r *cache.Redis) *Server {
 func (s *Server) Handler() http.Handler {
 	return middleware.Chain(s.mux,
 		middleware.RequestID,
+		middleware.Metrics(s.meter),
 		middleware.CORS(s.corsOrigins),
 		middleware.Logging(s.log),
 		middleware.RateLimit(300, time.Minute),
