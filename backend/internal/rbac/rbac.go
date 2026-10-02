@@ -32,9 +32,20 @@ var defaults = map[string]Role{
 }
 
 type ctxKey struct{}
+type orgKey struct{}
 
 func WithRoles(ctx context.Context, roles []string) context.Context {
 	return context.WithValue(ctx, ctxKey{}, roles)
+}
+
+// WithOrg carries the tenant. All store access must use OrgOf.
+func WithOrg(ctx context.Context, org string) context.Context {
+	return context.WithValue(ctx, orgKey{}, org)
+}
+
+func OrgOf(ctx context.Context) string {
+	v, _ := ctx.Value(orgKey{}).(string)
+	return v
 }
 
 func rolesOf(ctx context.Context) []string {

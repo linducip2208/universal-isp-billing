@@ -28,9 +28,12 @@ func (d *direct) GetDeviceInfo(_ context.Context) (*sdk.DeviceInfo, error) {
 	return &sdk.DeviceInfo{Vendor: d.vendor, Model: d.family}, nil
 }
 func (d *direct) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{
-		sdk.CapRADIUS: sdk.StateImplemented, sdk.CapProvisioning: sdk.StateModelDependent,
-		sdk.CapIfaceMonitor: sdk.StateModelDependent, sdk.CapDisconnect: sdk.StateModelDependent,
+	note := "transport command templates PLANNED for " + d.vendor + "/" + d.family
+	return &sdk.Capabilities{Items: []sdk.CapabilityInfo{
+		{ID: sdk.CapRADIUS, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapProvisioning, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapIfaceMonitor, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapDisconnect, Status: sdk.Planned, Note: note},
 	}}, nil
 }
 func (d *direct) GetSites(_ context.Context) ([]sdk.Site, error)       { return nil, nil }
@@ -44,13 +47,25 @@ func (d *direct) ProvisionSubscriber(_ context.Context, r sdk.ProvisionRequest) 
 	if r.IdempotencyKey == "" {
 		return errCred("idempotency_key")
 	}
-	return nil
+	// Honest fail-closed: per-model command templates are PLANNED.
+	// Never report success without touching the device.
+	return credErr("transport for " + d.vendor + "/" + d.family + " is PLANNED")
 }
-func (d *direct) UpdateSubscriber(_ context.Context, _ sdk.UpdateRequest) error { return nil }
-func (d *direct) SuspendSubscriber(_ context.Context, _ string) error           { return nil }
-func (d *direct) ActivateSubscriber(_ context.Context, _ string) error          { return nil }
-func (d *direct) DisconnectSubscriber(_ context.Context, _ string) error        { return nil }
-func (d *direct) DeleteSubscriber(_ context.Context, _ string) error            { return nil }
+func (d *direct) UpdateSubscriber(_ context.Context, _ sdk.UpdateRequest) error {
+	return credErr("transport for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *direct) SuspendSubscriber(_ context.Context, _ string) error {
+	return credErr("transport for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *direct) ActivateSubscriber(_ context.Context, _ string) error {
+	return credErr("transport for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *direct) DisconnectSubscriber(_ context.Context, _ string) error {
+	return credErr("transport for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *direct) DeleteSubscriber(_ context.Context, _ string) error {
+	return credErr("transport for " + d.vendor + "/" + d.family + " is PLANNED")
+}
 func (d *direct) Health() sdk.Health {
 	return sdk.Health{ConnectionType: d.ct, AuthType: "password/key", Vendor: d.vendor, Model: d.family}
 }
@@ -68,6 +83,7 @@ func mk(vendor, family string, ct sdk.ConnectionType) func(map[string]string) (s
 
 var Factories = map[string]func(map[string]string) (sdk.NetworkConnector, error){
 	"cisco-ios":     mk("Cisco", "IOS/XE", sdk.ConnSSH),
+	"cisco-smb":     mk("Cisco", "SmallBusiness", sdk.ConnREST),
 	"juniper-junos": mk("Juniper", "Junos", sdk.ConnNETCONF),
 	"huawei-vrp":    mk("Huawei", "VRP", sdk.ConnSSH),
 	"zte-zxhn":      mk("ZTE", "ZXAN", sdk.ConnSSH),
@@ -77,4 +93,5 @@ var Factories = map[string]func(map[string]string) (sdk.NetworkConnector, error)
 	"fortinet":      mk("Fortinet", "FortiOS", sdk.ConnREST),
 	"aruba-cx":      mk("Aruba", "CX", sdk.ConnREST),
 	"ruijie-router": mk("Ruijie", "Router", sdk.ConnSSH),
+	"dlink-smart":   mk("D-Link", "Smart", sdk.ConnSNMP),
 }

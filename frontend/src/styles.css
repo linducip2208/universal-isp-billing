@@ -24,4 +24,10 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px so
 .form button,.topbar button{padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--acc);color:#fff;cursor:pointer}
 .topbar a{color:var(--acc)}
 pre{overflow:auto;font-size:12px}
+.toolbar{display:flex;gap:8px}
+.toolbar input{padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);min-width:220px}
+.toolbar button,.pager button{padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer}
+.pager{display:flex;gap:10px;align-items:center;margin-top:10px}
+.skeleton{opacity:.6;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
 @media(max-width:800px){.sidebar{display:none}}

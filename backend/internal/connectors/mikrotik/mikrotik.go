@@ -342,15 +342,22 @@ func (c *Connector) GetDeviceInfo(ctx context.Context) (*sdk.DeviceInfo, error) 
 }
 
 func (c *Connector) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{
-		sdk.CapPPPoE: sdk.StateVerified, sdk.CapHotspot: sdk.StateVerified,
-		sdk.CapRADIUS: sdk.StateVerified, sdk.CapQueue: sdk.StateVerified,
-		sdk.CapDHCP: sdk.StateVerified, sdk.CapFirewall: sdk.StateVerified,
-		sdk.CapIfaceMonitor: sdk.StateVerified, sdk.CapTraffic: sdk.StateVerified,
-		sdk.CapDisconnect: sdk.StateVerified, sdk.CapProvisioning: sdk.StateVerified,
-		sdk.CapVLAN: sdk.StateImplemented, sdk.CapClientList: sdk.StateImplemented,
-		sdk.CapSiteDiscovery: sdk.StateNotSupported,
-	}}, nil
+	// PARTIAL: RouterOS API/REST protocol implementation with mock-transport
+	// tests. Hardware E2E (MIKROTIK_E2E) pending — see docs/connectors/mikrotik.md.
+	p := sdk.Partial
+	return sdk.NewCapabilities(
+		sdk.Cap(sdk.CapDeviceInfo, p), sdk.Cap(sdk.CapDeviceHealth, p),
+		sdk.Cap(sdk.CapInterfaces, p), sdk.Cap(sdk.CapIfaceMonitor, p),
+		sdk.Cap(sdk.CapTraffic, p), sdk.Cap(sdk.CapClients, p),
+		sdk.Cap(sdk.CapClientList, p), sdk.Cap(sdk.CapUsers, p),
+		sdk.Cap(sdk.CapPPPoE, p), sdk.Cap(sdk.CapHotspot, p),
+		sdk.Cap(sdk.CapRADIUS, p), sdk.Cap(sdk.CapQueues, p),
+		sdk.Cap(sdk.CapQueue, p), sdk.Cap(sdk.CapBandwidth, p),
+		sdk.Cap(sdk.CapDHCP, p), sdk.Cap(sdk.CapFirewall, p),
+		sdk.Cap(sdk.CapVLAN, p), sdk.Cap(sdk.CapDisconnect, p),
+		sdk.Cap(sdk.CapProvisioning, p), sdk.Cap(sdk.CapSuspend, p),
+		sdk.Cap(sdk.CapActivate, p), sdk.Cap(sdk.CapDelete, p),
+	), nil
 }
 
 func (c *Connector) GetSites(_ context.Context) ([]sdk.Site, error) {

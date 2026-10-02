@@ -17,7 +17,12 @@ type Job struct {
 	MaxAttempts    int
 	LastError      string
 	Status         string // queued | running | done | failed | dead
+	Priority       int    // higher runs first
+	DeviceID       string // jobs on the same device serialize
+	RateKey        string // per-connector rate-limit bucket ("" = none)
 }
+
+func errNoHandler(kind string) error { return fmt.Errorf("no handler for kind %s", kind) }
 
 type Handler func(ctx context.Context, j *Job) error
 

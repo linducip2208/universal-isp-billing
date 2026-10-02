@@ -14,7 +14,7 @@ func TestRegistryEmptyByDefault(t *testing.T) {
 }
 
 func TestRegisterAndCreate(t *testing.T) {
-	registry.Register(registry.Entry{Vendor: "TestV", ProductFamily: "F1", ConnectionType: sdk.ConnREST, Status: sdk.StateImplemented,
+	registry.Register(registry.Entry{Vendor: "TestV", ProductFamily: "F1", ConnectionType: sdk.ConnREST, Status: sdk.Partial,
 		Factory: func(cfg map[string]string) (sdk.NetworkConnector, error) { return nil, nil }})
 	if _, ok := registry.Lookup("TestV", "F1", sdk.ConnREST); !ok {
 		t.Fatal("should find")

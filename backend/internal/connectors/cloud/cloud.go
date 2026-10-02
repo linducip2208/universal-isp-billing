@@ -92,13 +92,25 @@ func (b *base) GetInterfaces(_ context.Context) ([]sdk.Iface, error) {
 func (b *base) GetTraffic(_ context.Context, t string) (*sdk.Traffic, error) {
 	return &sdk.Traffic{Target: t, SampledAt: time.Now()}, nil
 }
-func (b *base) ProvisionSubscriber(_ context.Context, _ sdk.ProvisionRequest) error { return nil }
-func (b *base) UpdateSubscriber(_ context.Context, _ sdk.UpdateRequest) error       { return nil }
-func (b *base) SuspendSubscriber(_ context.Context, _ string) error                 { return nil }
-func (b *base) ActivateSubscriber(_ context.Context, _ string) error                { return nil }
-func (b *base) DisconnectSubscriber(_ context.Context, _ string) error              { return nil }
-func (b *base) DeleteSubscriber(_ context.Context, _ string) error                  { return nil }
-func (b *base) Health() sdk.Health                                                  { return b.health }
+func (b *base) ProvisionSubscriber(_ context.Context, _ sdk.ProvisionRequest) error {
+	return fmt.Errorf("%s/%s: REQUIRES_VENDOR_ACCESS (no credentialed API session)", b.vendor, b.family)
+}
+func (b *base) UpdateSubscriber(_ context.Context, _ sdk.UpdateRequest) error {
+	return fmt.Errorf("%s/%s: REQUIRES_VENDOR_ACCESS (no credentialed API session)", b.vendor, b.family)
+}
+func (b *base) SuspendSubscriber(_ context.Context, _ string) error {
+	return fmt.Errorf("%s/%s: REQUIRES_VENDOR_ACCESS (no credentialed API session)", b.vendor, b.family)
+}
+func (b *base) ActivateSubscriber(_ context.Context, _ string) error {
+	return fmt.Errorf("%s/%s: REQUIRES_VENDOR_ACCESS (no credentialed API session)", b.vendor, b.family)
+}
+func (b *base) DisconnectSubscriber(_ context.Context, _ string) error {
+	return fmt.Errorf("%s/%s: REQUIRES_VENDOR_ACCESS (no credentialed API session)", b.vendor, b.family)
+}
+func (b *base) DeleteSubscriber(_ context.Context, _ string) error {
+	return fmt.Errorf("%s/%s: REQUIRES_VENDOR_ACCESS (no credentialed API session)", b.vendor, b.family)
+}
+func (b *base) Health() sdk.Health { return b.health }
 
 // --- Concrete vendors ---
 
@@ -139,39 +151,40 @@ func NewCnMaestro(cfg map[string]string) (sdk.NetworkConnector, error) {
 	return &CnMaestro{newBase("Cambium", "cnMaestro", sdk.ConnCloudAPI, "https://cloud.cambiumnetworks.com", "docs/connectors/cnmaestro.md", cfg)}, nil
 }
 
-func caps(states ...sdk.Capability) *sdk.Capabilities {
-	m := map[sdk.Capability]sdk.CapabilityState{}
-	for _, s := range states {
-		m[s] = sdk.StateRequiresVendorAcc
+func caps(ids ...sdk.Capability) *sdk.Capabilities {
+	items := make([]sdk.CapabilityInfo, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, sdk.CapabilityInfo{ID: id, Status: sdk.RequiresVendorAccess, Note: "credentialed vendor API required"})
 	}
-	return &sdk.Capabilities{States: m}
+	return &sdk.Capabilities{Items: items}
 }
 
 func (c *RuijieCloud) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapIfaceMonitor, sdk.CapProvisioning, sdk.CapSiteDiscovery), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapIfaceMonitor, sdk.CapProvisioning, sdk.CapSiteDiscovery, sdk.CapAP, sdk.CapSSID, sdk.CapWebhooks), nil
 }
 func (c *Reyee) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapIfaceMonitor, sdk.CapSiteDiscovery), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapIfaceMonitor, sdk.CapSiteDiscovery), nil
 }
 func (c *UniFi) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{
-		sdk.CapClientList: sdk.StateRequiresVendorAcc, sdk.CapTraffic: sdk.StateRequiresVendorAcc,
-		sdk.CapDisconnect: sdk.StateRequiresVendorAcc, sdk.CapVoucher: sdk.StateRequiresVendorAcc,
-		sdk.CapHotspot: sdk.StateRequiresVendorAcc, sdk.CapSiteDiscovery: sdk.StateRequiresVendorAcc,
+	return &sdk.Capabilities{Items: []sdk.CapabilityInfo{
+		{ID: sdk.CapClients, Status: sdk.RequiresVendorAccess}, {ID: sdk.CapClientList, Status: sdk.RequiresVendorAccess},
+		{ID: sdk.CapTraffic, Status: sdk.RequiresVendorAccess}, {ID: sdk.CapDisconnect, Status: sdk.RequiresVendorAccess},
+		{ID: sdk.CapVoucher, Status: sdk.RequiresVendorAccess}, {ID: sdk.CapHotspot, Status: sdk.RequiresVendorAccess},
+		{ID: sdk.CapSiteDiscovery, Status: sdk.RequiresVendorAccess}, {ID: sdk.CapAP, Status: sdk.RequiresVendorAccess},
 	}}, nil
 }
 func (c *Omada) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapProvisioning), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapProvisioning, sdk.CapAP), nil
 }
 func (c *Meraki) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapProvisioning), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapProvisioning), nil
 }
 func (c *ArubaCentral) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapAP), nil
 }
 func (c *Mist) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapAP), nil
 }
 func (c *CnMaestro) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return caps(sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery), nil
+	return caps(sdk.CapClients, sdk.CapClientList, sdk.CapTraffic, sdk.CapSiteDiscovery, sdk.CapAP), nil
 }

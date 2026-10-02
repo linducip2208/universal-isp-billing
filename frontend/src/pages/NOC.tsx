@@ -2,24 +2,32 @@ import React, { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useLang } from '../main'
 
-const seed = { total_devices: 12, online_devices: 10, offline_devices: 1, degraded_devices: 1, active_subscribers: 1240, suspended_subscribers: 37, online_sessions: 986, active_alerts: 4, critical_alerts: 1, provisioning_failures_24h: 2 }
-
 export function NOC() {
   const ctx: any = useLang()
-  const [d, setD] = useState<any>(seed)
+  const [d, setD] = useState<any>(null)
   const [live, setLive] = useState(false)
+  const [err, setErr] = useState('')
   useEffect(() => {
     let stop = false
     async function poll() {
       try {
         const j = await api('/api/v1/noc/summary')
-        if (!stop) { setD(j); setLive(true) }
-      } catch { if (!stop) setLive(false) }
+        if (!stop) { setD(j); setLive(true); setErr('') }
+      } catch (e: any) { if (!stop) { setLive(false); setErr(String(e.message || e)) } }
     }
     poll()
     const id = setInterval(poll, 5000)
     return () => { stop = true; clearInterval(id) }
   }, [])
+  if (!d) {
+    return (
+      <div className="page"><h2>{ctx.t('nav.noc')}</h2>
+        {err
+          ? <div className="empty">{ctx.t('noc.offline')}: {err}</div>
+          : <div className="card skeleton">Loading…</div>}
+      </div>
+    )
+  }
   const cards: [string, number][] = [
     ['Devices online', d.online_devices ?? 0], ['Devices offline', d.offline_devices ?? 0],
     ['Active subscribers', d.active_subscribers ?? 0], ['Suspended', d.suspended_subscribers ?? 0],

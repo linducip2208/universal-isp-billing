@@ -26,9 +26,13 @@ func (d *dev) GetDeviceInfo(_ context.Context) (*sdk.DeviceInfo, error) {
 	return &sdk.DeviceInfo{Vendor: d.vendor, Model: d.family}, nil
 }
 func (d *dev) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{
-		sdk.CapOLT: sdk.StateModelDependent, sdk.CapONU: sdk.StateModelDependent,
-		sdk.CapProvisioning: sdk.StateModelDependent, sdk.CapVLAN: sdk.StateModelDependent,
+	note := "vendor adapter PLANNED for " + d.vendor + "/" + d.family
+	return &sdk.Capabilities{Items: []sdk.CapabilityInfo{
+		{ID: sdk.CapOLT, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapONU, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapOpticalPower, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapProvisioning, Status: sdk.Planned, Note: note},
+		{ID: sdk.CapVLAN, Status: sdk.Planned, Note: note},
 	}}, nil
 }
 func (d *dev) GetSites(_ context.Context) ([]sdk.Site, error)       { return nil, nil }
@@ -42,13 +46,23 @@ func (d *dev) ProvisionSubscriber(_ context.Context, r sdk.ProvisionRequest) err
 	if r.IdempotencyKey == "" {
 		return errMissing("idempotency_key")
 	}
-	return nil
+	return missing("olt provision for " + d.vendor + "/" + d.family + " is PLANNED")
 }
-func (d *dev) UpdateSubscriber(_ context.Context, _ sdk.UpdateRequest) error { return nil }
-func (d *dev) SuspendSubscriber(_ context.Context, _ string) error           { return nil }
-func (d *dev) ActivateSubscriber(_ context.Context, _ string) error          { return nil }
-func (d *dev) DisconnectSubscriber(_ context.Context, _ string) error        { return nil }
-func (d *dev) DeleteSubscriber(_ context.Context, _ string) error            { return nil }
+func (d *dev) UpdateSubscriber(_ context.Context, _ sdk.UpdateRequest) error {
+	return missing("olt update for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *dev) SuspendSubscriber(_ context.Context, _ string) error {
+	return missing("olt suspend for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *dev) ActivateSubscriber(_ context.Context, _ string) error {
+	return missing("olt activate for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *dev) DisconnectSubscriber(_ context.Context, _ string) error {
+	return missing("olt disconnect for " + d.vendor + "/" + d.family + " is PLANNED")
+}
+func (d *dev) DeleteSubscriber(_ context.Context, _ string) error {
+	return missing("olt delete for " + d.vendor + "/" + d.family + " is PLANNED")
+}
 func (d *dev) Health() sdk.Health {
 	return sdk.Health{ConnectionType: d.ct, AuthType: "password/snmp", Vendor: d.vendor, Model: d.family}
 }

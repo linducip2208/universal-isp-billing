@@ -11,12 +11,38 @@ import (
 type Factory func(cfg map[string]string) (sdk.NetworkConnector, error)
 
 type Entry struct {
-	Vendor         string
-	ProductFamily  string
-	ConnectionType sdk.ConnectionType
-	Status         sdk.CapabilityState
-	DocURL         string
-	Factory        Factory
+	Vendor           string
+	ProductFamily    string
+	Models           []string
+	ConnectionType   sdk.ConnectionType
+	Protocols        []string
+	AuthMethods      []string
+	Limitations      []string
+	ConnectorVersion string
+	Status           sdk.Verification
+	DocURL           string
+	VerifiedAt       string
+	Evidence         string
+	Factory          Factory
+}
+
+// Describe builds the public connector identity card (no secrets, no factory).
+func (e Entry) Describe() sdk.Descriptor {
+	return sdk.Descriptor{
+		Vendor: e.Vendor, ProductFamily: e.ProductFamily, Models: e.Models,
+		ConnectionType: e.ConnectionType, Protocols: e.Protocols, AuthMethods: e.AuthMethods,
+		Limitations: e.Limitations, ConnectorVersion: e.ConnectorVersion,
+		Status: e.Status, DocURL: e.DocURL, VerifiedAt: e.VerifiedAt, Evidence: e.Evidence,
+	}
+}
+
+// Descriptors returns the public identity cards of all registered connectors.
+func Descriptors() []sdk.Descriptor {
+	out := []sdk.Descriptor{}
+	for _, e := range List() {
+		out = append(out, e.Describe())
+	}
+	return out
 }
 
 var (

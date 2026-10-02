@@ -1,23 +1,23 @@
-# Machine-readable vendor registry. Status values:
-# PLANNED | IN_DEVELOPMENT | IMPLEMENTED | VERIFIED | MODEL_DEPENDENT |
-# REQUIRES_VENDOR_ACCESS | DEPRECATED
-# VERIFIED requires a real connection test or documented API test (see verified_at/evidence).
+# Machine-readable vendor registry. Status values (canonical):
+# VERIFIED | PARTIAL | READY_FOR_CREDENTIALS | REQUIRES_VENDOR_ACCESS | UNSUPPORTED | PLANNED
+# VERIFIED requires real connection/documented API tests (see verified_at/evidence).
+# NOTHING is VERIFIED yet. MikroTik/generics are PARTIAL (protocol-tested,
+# hardware/agent interop E2E pending: MIKROTIK_E2E / RADIUS_E2E / SNMP_E2E).
 - vendor: MikroTik
   product_family: RouterOS
   connection_type: cli
   api_type: routeros-api
   authentication: password
-  capabilities: [pppoe, hotspot, radius, queue, dhcp, firewall, interface_monitoring, disconnect, provisioning]
+  capabilities: [device_info, device_health, interfaces, traffic, clients, pppoe, hotspot, radius, queues, bandwidth, dhcp, firewall, vlan, disconnect, provisioning, suspend, activate, delete]
   documentation_url: docs/connectors/mikrotik.md
-  status: VERIFIED
-  verified_at: null
-  evidence: mock-transport unit tests; hardware verification pending (see CONNECTORS.md)
+  status: PARTIAL
+  evidence: mock-transport protocol tests
 - vendor: Ruijie
   product_family: Cloud
   connection_type: cloud_api
   api_type: rest
   authentication: oauth2/api-key
-  capabilities: [client_list, traffic, site_discovery]
+  capabilities: [clients, traffic, site_discovery, ap]
   documentation_url: docs/connectors/ruijie-cloud.md
   status: REQUIRES_VENDOR_ACCESS
 - vendor: Ruijie
@@ -25,7 +25,7 @@
   connection_type: cloud_api
   api_type: rest
   authentication: oauth2/api-key
-  capabilities: [client_list, traffic]
+  capabilities: [clients, traffic]
   documentation_url: docs/connectors/reyee.md
   status: REQUIRES_VENDOR_ACCESS
 - vendor: Ubiquiti
@@ -33,7 +33,7 @@
   connection_type: cloud_api
   api_type: rest
   authentication: api-key
-  capabilities: [client_list, traffic, hotspot, voucher, disconnect]
+  capabilities: [clients, traffic, hotspot, voucher, disconnect, ap]
   documentation_url: docs/connectors/unifi.md
   status: REQUIRES_VENDOR_ACCESS
 - vendor: TP-Link
@@ -41,7 +41,7 @@
   connection_type: cloud_api
   api_type: rest
   authentication: api-key
-  capabilities: [client_list, traffic, site_discovery]
+  capabilities: [clients, traffic, site_discovery, ap]
   documentation_url: docs/connectors/omada.md
   status: REQUIRES_VENDOR_ACCESS
 - vendor: Cisco
@@ -49,7 +49,7 @@
   connection_type: cloud_api
   api_type: rest
   authentication: api-key
-  capabilities: [client_list, traffic, site_discovery]
+  capabilities: [clients, traffic, site_discovery]
   documentation_url: docs/connectors/meraki.md
   status: REQUIRES_VENDOR_ACCESS
 - vendor: Generic
@@ -59,15 +59,17 @@
   authentication: shared-secret
   capabilities: [radius, disconnect, coa]
   documentation_url: docs/connectors/generic.md
-  status: IMPLEMENTED
+  status: PARTIAL
+  evidence: RFC packet codec unit tests
 - vendor: Generic
   product_family: SNMP
   connection_type: snmp
   api_type: snmp
   authentication: community/v3
-  capabilities: [interface_monitoring, traffic]
+  capabilities: [snmp, interfaces, interface_monitoring, traffic, device_info, device_health]
   documentation_url: docs/connectors/generic.md
-  status: IMPLEMENTED
+  status: PARTIAL
+  evidence: fake-agent protocol tests
 - vendor: Generic
   product_family: REST
   connection_type: generic_http
@@ -75,4 +77,4 @@
   authentication: token/basic
   capabilities: [provisioning]
   documentation_url: docs/connectors/generic.md
-  status: IMPLEMENTED
+  status: PARTIAL

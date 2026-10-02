@@ -1,6 +1,12 @@
 // Package sdk defines the vendor-neutral NetworkConnector interface.
 // Billing and provisioning code must depend ONLY on this interface,
 // never on vendor-specific packages.
+//
+// Capability model 2.0: granular capability IDs, per-capability versions
+// and firmware notes, and a strict 6-state verification model:
+//
+//	VERIFIED, PARTIAL, READY_FOR_CREDENTIALS,
+//	REQUIRES_VENDOR_ACCESS, UNSUPPORTED, PLANNED
 package sdk
 
 import (
@@ -23,42 +29,129 @@ const (
 	ConnGenericHTTP ConnectionType = "generic_http"
 )
 
+// Capability is a granular, versionable operation/feature identifier.
 type Capability string
 
 const (
+	CapDeviceInfo    Capability = "device_info"
+	CapDeviceHealth  Capability = "device_health"
+	CapInterfaces    Capability = "interfaces"
+	CapTraffic       Capability = "traffic"
+	CapClients       Capability = "clients"
+	CapClientMonitor Capability = "client_monitoring"
+	CapUsers         Capability = "users"
+	CapSubscribers   Capability = "subscribers"
 	CapPPPoE         Capability = "pppoe"
 	CapIPoE          Capability = "ipoe"
 	CapHotspot       Capability = "hotspot"
 	CapVoucher       Capability = "voucher"
-	CapRADIUS        Capability = "radius"
-	CapQueue         Capability = "queue"
 	CapDHCP          Capability = "dhcp"
-	CapFirewall      Capability = "firewall"
-	CapIfaceMonitor  Capability = "interface_monitoring"
-	CapTraffic       Capability = "traffic"
-	CapDisconnect    Capability = "disconnect"
-	CapCoA           Capability = "coa"
-	CapProvisioning  Capability = "provisioning"
+	CapIPPools       Capability = "ip_pools"
 	CapVLAN          Capability = "vlan"
+	CapFirewall      Capability = "firewall"
+	CapNAT           Capability = "nat"
+	CapRoutes        Capability = "routes"
+	CapQueues        Capability = "queues"
+	CapBandwidth     Capability = "bandwidth"
+	CapQoS           Capability = "qos"
+	CapRADIUS        Capability = "radius"
+	CapCoA           Capability = "coa"
+	CapDisconnect    Capability = "disconnect"
+	CapProvisioning  Capability = "provisioning"
+	CapSuspend       Capability = "suspend"
+	CapActivate      Capability = "activate"
+	CapDelete        Capability = "delete"
+	CapReboot        Capability = "reboot"
+	CapConfigBackup  Capability = "config_backup"
+	CapConfigRestore Capability = "config_restore"
+	CapWireless      Capability = "wireless"
+	CapAP            Capability = "ap"
+	CapSSID          Capability = "ssid"
 	CapOLT           Capability = "olt"
 	CapONU           Capability = "onu"
+	CapOpticalPower  Capability = "optical_power"
 	CapTR069         Capability = "tr069"
-	CapClientList    Capability = "client_list"
+	CapSyslog        Capability = "syslog"
+	CapSNMP          Capability = "snmp"
+	CapNETCONF       Capability = "netconf"
+	CapRESTCONF      Capability = "restconf"
+	CapSSH           Capability = "ssh"
+	CapCLI           Capability = "cli"
+	CapWebhooks      Capability = "webhooks"
 	CapSiteDiscovery Capability = "site_discovery"
+	CapIfaceMonitor  Capability = "interface_monitoring"
+	CapQueue         Capability = "queue" // legacy alias of queues
+	CapClientList    Capability = "client_list"
 )
 
-type CapabilityState string
+// Verification is the strict connector/capability status model.
+type Verification string
 
 const (
-	StateVerified          CapabilityState = "VERIFIED"
-	StateImplemented       CapabilityState = "IMPLEMENTED"
-	StateModelDependent    CapabilityState = "MODEL_DEPENDENT"
-	StateAPIRequired       CapabilityState = "API_REQUIRED"
-	StateCredentialReq     CapabilityState = "CREDENTIAL_REQUIRED"
-	StateNotSupported      CapabilityState = "NOT_SUPPORTED"
-	StatePlanned           CapabilityState = "PLANNED"
-	StateRequiresVendorAcc CapabilityState = "REQUIRES_VENDOR_ACCESS"
+	Verified             Verification = "VERIFIED"
+	Partial              Verification = "PARTIAL"
+	ReadyForCredentials  Verification = "READY_FOR_CREDENTIALS"
+	RequiresVendorAccess Verification = "REQUIRES_VENDOR_ACCESS"
+	Unsupported          Verification = "UNSUPPORTED"
+	Planned              Verification = "PLANNED"
 )
+
+// CapabilityState is kept as an alias so older call sites keep compiling;
+// new code must use Verification.
+type CapabilityState = Verification
+
+const (
+	StateVerified          = Verified
+	StateImplemented       = Partial
+	StateModelDependent    = Partial
+	StateAPIRequired       = ReadyForCredentials
+	StateCredentialReq     = ReadyForCredentials
+	StateNotSupported      = Unsupported
+	StatePlanned           = Planned
+	StateRequiresVendorAcc = RequiresVendorAccess
+)
+
+// CapabilityInfo describes one granular capability with version/firmware
+// awareness and model-specific notes.
+type CapabilityInfo struct {
+	ID          Capability   `json:"id"`
+	Status      Verification `json:"status"`
+	Version     string       `json:"version,omitempty"`
+	MinFirmware string       `json:"min_firmware,omitempty"`
+	Models      []string     `json:"models,omitempty"`
+	Note        string       `json:"note,omitempty"`
+}
+
+type Capabilities struct {
+	Items []CapabilityInfo `json:"items"`
+}
+
+func NewCapabilities(items ...CapabilityInfo) *Capabilities {
+	return &Capabilities{Items: items}
+}
+
+// Cap is a helper for the common case: implemented/partial without notes.
+func Cap(id Capability, st Verification) CapabilityInfo {
+	return CapabilityInfo{ID: id, Status: st}
+}
+
+func (c *Capabilities) StatusOf(id Capability) (Verification, bool) {
+	if c == nil {
+		return Unsupported, false
+	}
+	for _, it := range c.Items {
+		if it.ID == id {
+			return it.Status, true
+		}
+	}
+	return Unsupported, false
+}
+
+// Has reports whether the capability is usable (verified or partial).
+func (c *Capabilities) Has(id Capability) bool {
+	st, ok := c.StatusOf(id)
+	return ok && (st == Verified || st == Partial)
+}
 
 type DeviceInfo struct {
 	Vendor        string  `json:"vendor"`
@@ -116,15 +209,6 @@ type Traffic struct {
 	SampledAt time.Time `json:"sampled_at"`
 }
 
-type Capabilities struct {
-	States map[Capability]CapabilityState `json:"states"`
-}
-
-func (c *Capabilities) Has(cap Capability) bool {
-	s, ok := c.States[cap]
-	return ok && (s == StateVerified || s == StateImplemented)
-}
-
 type ProvisionRequest struct {
 	SubscriberID   string            `json:"subscriber_id"`
 	Username       string            `json:"username"`
@@ -154,6 +238,24 @@ type Health struct {
 	LatencyMs      int64          `json:"latency_ms"`
 	LastSuccess    *time.Time     `json:"last_success,omitempty"`
 	LastError      string         `json:"last_error,omitempty"`
+}
+
+// Descriptor is the full connector identity card served by the registry,
+// Connection Lab, and docs/capability-matrix.yaml.
+type Descriptor struct {
+	Vendor           string           `json:"vendor"`
+	ProductFamily    string           `json:"product_family"`
+	Models           []string         `json:"models,omitempty"`
+	ConnectionType   ConnectionType   `json:"connection_type"`
+	Protocols        []string         `json:"protocols,omitempty"`
+	AuthMethods      []string         `json:"auth_methods,omitempty"`
+	Capabilities     []CapabilityInfo `json:"capabilities,omitempty"`
+	Limitations      []string         `json:"limitations,omitempty"`
+	ConnectorVersion string           `json:"connector_version"`
+	Status           Verification     `json:"status"`
+	DocURL           string           `json:"doc_url,omitempty"`
+	VerifiedAt       string           `json:"verified_at,omitempty"`
+	Evidence         string           `json:"evidence,omitempty"`
 }
 
 // NetworkConnector is THE abstraction boundary. All vendor packages implement it.

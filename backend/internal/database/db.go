@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"time"
+
+	_ "github.com/lib/pq" // postgres driver (stdlib database/sql)
 )
 
 // Open is a thin wrapper; migrations live in backend/migrations and are

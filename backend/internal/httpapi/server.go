@@ -11,26 +11,37 @@ import (
 	"github.com/universal-isp/platform/internal/health"
 	"github.com/universal-isp/platform/internal/middleware"
 	"github.com/universal-isp/platform/internal/rbac"
+	"github.com/universal-isp/platform/internal/store"
 	"log/slog"
 	"time"
 )
 
 type Server struct {
-	mux       *http.ServeMux
-	log       *slog.Logger
-	jwtSecret string
-	health    *health.Checker
+	mux         *http.ServeMux
+	log         *slog.Logger
+	jwtSecret   string
+	health      *health.Checker
+	store       *store.Store
+	demoLogin   bool
+	corsOrigins []string
+	throttle    *loginThrottle
 }
 
 func New(log *slog.Logger, jwtSecret string, h *health.Checker) *Server {
-	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h}
+	s := &Server{mux: http.NewServeMux(), log: log, jwtSecret: jwtSecret, health: h, throttle: newLoginThrottle()}
 	h.Register(s.mux)
 	s.routes()
 	return s
 }
 
+func (s *Server) WithStore(st *store.Store) *Server { s.store = st; return s }
+func (s *Server) WithDemoLogin(on bool) *Server     { s.demoLogin = on; return s }
+func (s *Server) WithCORS(origins []string) *Server { s.corsOrigins = origins; return s }
+
 func (s *Server) Handler() http.Handler {
 	return middleware.Chain(s.mux,
+		middleware.RequestID,
+		middleware.CORS(s.corsOrigins),
 		middleware.Logging(s.log),
 		middleware.RateLimit(300, time.Minute),
 		middleware.JWT(s.jwtSecret),
@@ -48,26 +59,32 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("/api/v1/connectors", s.handleConnectors)
 	s.mux.HandleFunc("/api/v1/noc/summary", s.handleNOC)
 	s.mux.HandleFunc("/api/v1/vendor-matrix", s.handleMatrix)
-	// CRUD stubs with RBAC (backed by DB in production; in-memory shape here)
-	s.mux.Handle("/api/v1/customers", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleStub("customers"))))
-	s.mux.Handle("/api/v1/subscriptions", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleStub("subscriptions"))))
-	s.mux.Handle("/api/v1/packages", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleStub("packages"))))
-	s.mux.Handle("/api/v1/invoices", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleStub("invoices"))))
-	s.mux.Handle("/api/v1/payments", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleStub("payments"))))
-	s.mux.Handle("/api/v1/devices", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleStub("devices"))))
-	s.mux.Handle("/api/v1/provisioning/jobs", middleware.Require(rbac.ProvisionExec)(http.HandlerFunc(s.handleStub("provisioning-jobs"))))
-	s.mux.Handle("/api/v1/monitoring/devices", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleStub("monitoring"))))
-	s.mux.Handle("/api/v1/alerts", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleStub("alerts"))))
-	s.mux.Handle("/api/v1/events", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleStub("events"))))
-	s.mux.Handle("/api/v1/reports/summary", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleStub("reports"))))
-	s.mux.Handle("/api/v1/system/settings", middleware.Require(rbac.SystemAdmin)(http.HandlerFunc(s.handleStub("settings"))))
+	// Resource lists are DB-backed and tenant-scoped. Without a database the
+	// API answers 503 explicitly — it never returns fabricated rows.
+	s.mux.Handle("/api/v1/customers", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleResource("customers"))))
+	s.mux.Handle("/api/v1/subscriptions", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleResource("subscriptions"))))
+	s.mux.Handle("/api/v1/packages", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleResource("packages"))))
+	s.mux.Handle("/api/v1/invoices", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleResource("invoices"))))
+	s.mux.Handle("/api/v1/payments", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleResource("payments"))))
+	s.mux.Handle("/api/v1/devices", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("devices"))))
+	s.mux.Handle("/api/v1/sites", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("sites"))))
+	s.mux.Handle("/api/v1/provisioning/jobs", middleware.Require(rbac.ProvisionExec)(http.HandlerFunc(s.handleResource("network_jobs"))))
+	s.mux.Handle("/api/v1/alerts", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("alerts"))))
+	s.mux.Handle("/api/v1/events", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("events"))))
+	s.mux.Handle("/api/v1/audit", middleware.Require(rbac.SystemAdmin)(http.HandlerFunc(s.handleResource("audit_logs"))))
+	s.mux.Handle("/api/v1/reports/summary", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleNOC)))
+	s.mux.Handle("/api/v1/system/settings", middleware.Require(rbac.SystemAdmin)(http.HandlerFunc(s.handleSettings)))
 	s.mux.Handle("/api/v1/lab/test", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleLabTest)))
-	s.mux.Handle("/api/v1/topology", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleStub("topology"))))
+	s.mux.Handle("/api/v1/topology", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleTopology)))
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.throttle.allow(r.RemoteAddr) {
+		middleware.Error(w, http.StatusTooManyRequests, "too many login attempts", r.Header.Get("X-Request-ID"))
 		return
 	}
 	var body struct {
@@ -79,11 +96,26 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "username and password required"})
 		return
 	}
-	// Demo auth: admin/secret. Production verifies bcrypt hash in users table + login throttling.
-	if !(body.Username == "admin" && body.Password == "secret") {
+	// Production path: verify against users table (PBKDF2 hash + roles).
+	if s.store != nil {
+		_, org, roles, err := s.store.Authenticate(r.Context(), body.Username, body.Password)
+		if err != nil {
+			writeJSON(w, 401, map[string]string{"error": "invalid credentials"})
+			return
+		}
+		if len(roles) == 0 {
+			roles = []string{"viewer"}
+		}
+		tok, _ := auth.Sign(s.jwtSecret, body.Username, org, roles, 12*time.Hour)
+		writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username})
+		return
+	}
+	// Demo path: ONLY when explicitly enabled (ISP_DEMO_LOGIN=1). Refused otherwise.
+	if !s.demoLogin || !(body.Username == "admin" && body.Password == "secret") {
 		writeJSON(w, 401, map[string]string{"error": "invalid credentials"})
 		return
 	}
+	s.log.Warn("demo login used — enable only for local development")
 	tok, _ := auth.Sign(s.jwtSecret, body.Username, "demo-isp", []string{"superadmin"}, 12*time.Hour)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": body.Username})
 }
@@ -130,16 +162,80 @@ func (s *Server) handleLabTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNOC(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, 200, map[string]any{
-		"total_devices": 12, "online_devices": 10, "offline_devices": 1, "degraded_devices": 1,
-		"active_subscribers": 1240, "suspended_subscribers": 37, "online_sessions": 986,
-		"active_alerts": 4, "critical_alerts": 1, "provisioning_failures_24h": 2,
-		"updated_at": time.Now().UTC(),
-	})
+	if s.store == nil {
+		middleware.Error(w, http.StatusServiceUnavailable, "database not configured", r.Header.Get("X-Request-ID"))
+		return
+	}
+	sum, err := s.store.NOC(r.Context(), rbac.OrgOf(r.Context()))
+	if err != nil {
+		middleware.Error(w, http.StatusBadGateway, "noc query failed", r.Header.Get("X-Request-ID"))
+		return
+	}
+	writeJSON(w, 200, sum)
 }
 
-func (s *Server) handleStub(resource string) func(w http.ResponseWriter, r *http.Request) {
+// handleResource serves tenant-scoped paginated lists:
+// ?search=&status=&page=&per_page=&sort=&dir=
+func (s *Server) handleResource(name string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"data": []any{}, "resource": resource, "page": 1, "per_page": 25, "total": 0})
+		if s.store == nil {
+			middleware.Error(w, http.StatusServiceUnavailable, "database not configured", r.Header.Get("X-Request-ID"))
+			return
+		}
+		q := r.URL.Query()
+		pg, err := s.store.List(r.Context(), rbac.OrgOf(r.Context()), name, store.Query{
+			Search: q.Get("search"), Status: q.Get("status"),
+			Page: atoi(q.Get("page")), PerPage: atoi(q.Get("per_page")),
+			Sort: q.Get("sort"), Dir: q.Get("dir"),
+		})
+		if err != nil {
+			middleware.Error(w, http.StatusBadGateway, "query failed", r.Header.Get("X-Request-ID"))
+			return
+		}
+		writeJSON(w, 200, pg)
 	}
+}
+
+func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, 200, map[string]any{"data": map[string]string{"default_lang": "en"}})
+}
+
+func (s *Server) handleTopology(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		middleware.Error(w, http.StatusServiceUnavailable, "database not configured", r.Header.Get("X-Request-ID"))
+		return
+	}
+	ctx := r.Context()
+	org := rbac.OrgOf(ctx)
+	devs, err := s.store.List(ctx, org, "devices", store.Query{PerPage: 100})
+	if err != nil {
+		middleware.Error(w, http.StatusBadGateway, "query failed", r.Header.Get("X-Request-ID"))
+		return
+	}
+	sites, _ := s.store.List(ctx, org, "sites", store.Query{PerPage: 100})
+	g := map[string]any{"nodes": []any{}, "edges": []any{}}
+	var nodes []any
+	if sites != nil {
+		for _, n := range sites.Data {
+			nodes = append(nodes, map[string]any{"id": n["id"], "kind": "site", "label": n["name"]})
+		}
+	}
+	var edges []any
+	for _, d := range devs.Data {
+		nodes = append(nodes, map[string]any{"id": d["id"], "kind": "device", "label": d["host"], "status": d["status"]})
+		edges = append(edges, map[string]any{"from": "site", "to": d["id"], "kind": "logical"})
+	}
+	g["nodes"], g["edges"] = nodes, edges
+	writeJSON(w, 200, g)
+}
+
+func atoi(s string) int {
+	n := 0
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0
+		}
+		n = n*10 + int(c-'0')
+	}
+	return n
 }

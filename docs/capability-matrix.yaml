@@ -1,0 +1,48 @@
+# Machine-readable vendor registry (summary).
+# FULL listing (38 entries, generated from the live connector registry):
+#   docs/capability-matrix.json   (via `ispctl capabilities`)
+# Status model: VERIFIED | PARTIAL | READY_FOR_CREDENTIALS |
+#               REQUIRES_VENDOR_ACCESS | UNSUPPORTED | PLANNED
+# Rule: VERIFIED only with real device/protocol test evidence (see evidence field).
+# Today: NOTHING is VERIFIED. MikroTik + generics are PARTIAL (protocol-tested,
+# hardware/agent interop E2E pending). Cloud vendors are REQUIRES_VENDOR_ACCESS.
+# Routers/OLT are PLANNED and fail closed.
+matrices:
+  - {vendor: MikroTik, family: RouterOS, conn: cli, status: PARTIAL, evidence: mock-transport protocol tests}
+  - {vendor: MikroTik, family: RouterOS-REST, conn: rest, status: PARTIAL, evidence: mock-transport protocol tests}
+  - {vendor: Generic, family: RADIUS, conn: radius, status: PARTIAL, evidence: RFC packet codec unit tests}
+  - {vendor: Generic, family: SNMP, conn: snmp, status: PARTIAL, evidence: fake-agent protocol tests}
+  - {vendor: Generic, family: REST, conn: generic_http, status: PARTIAL, evidence: unit tests}
+  - {vendor: Ruijie, family: Cloud, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Ruijie, family: Reyee, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Ubiquiti, family: UniFi, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: TP-Link, family: Omada, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Cisco, family: Meraki, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Aruba, family: Central, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Juniper, family: Mist, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Cambium, family: cnMaestro, conn: cloud_api, status: REQUIRES_VENDOR_ACCESS}
+  - {vendor: Cisco, family: IOS/XE, conn: ssh, status: PLANNED}
+  - {vendor: Cisco, family: SmallBusiness, conn: rest, status: PLANNED}
+  - {vendor: Juniper, family: Junos, conn: netconf, status: PLANNED}
+  - {vendor: Huawei, family: VRP, conn: ssh, status: PLANNED}
+  - {vendor: ZTE, family: ZXAN, conn: ssh, status: PLANNED}
+  - {vendor: Nokia, family: SR OS, conn: netconf, status: PLANNED}
+  - {vendor: VyOS, family: VyOS, conn: restconf, status: PLANNED}
+  - {vendor: Ubiquiti, family: EdgeRouter, conn: ssh, status: PLANNED}
+  - {vendor: Fortinet, family: FortiOS, conn: rest, status: PLANNED}
+  - {vendor: Aruba, family: CX, conn: rest, status: PLANNED}
+  - {vendor: Ruijie, family: Router, conn: ssh, status: PLANNED}
+  - {vendor: D-Link, family: Smart, conn: snmp, status: PLANNED}
+  - {vendor: Huawei, family: MA5600T, conn: snmp, status: PLANNED}
+  - {vendor: ZTE, family: C320, conn: snmp, status: PLANNED}
+  - {vendor: Nokia, family: 7360, conn: snmp, status: PLANNED}
+  - {vendor: FiberHome, family: AN5116, conn: snmp, status: PLANNED}
+  - {vendor: BDCOM, family: P3310, conn: snmp, status: PLANNED}
+  - {vendor: VSOL, family: V1600, conn: snmp, status: PLANNED}
+  - {vendor: C-Data, family: FD1608, conn: snmp, status: PLANNED}
+  - {vendor: Dasan, family: V8240, conn: snmp, status: PLANNED}
+  - {vendor: Raisecom, family: ISC, conn: snmp, status: PLANNED}
+  - {vendor: Zyxel, family: OLT1408, conn: snmp, status: PLANNED}
+  - {vendor: Calix, family: E7, conn: snmp, status: PLANNED}
+  - {vendor: ADTRAN, family: TA5000, conn: snmp, status: PLANNED}
+  - {vendor: DZS, family: Velocity, conn: snmp, status: PLANNED}

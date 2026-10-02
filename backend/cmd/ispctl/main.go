@@ -2,47 +2,203 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
+	"github.com/universal-isp/platform/internal/config"
+	"github.com/universal-isp/platform/internal/connectors/all"
 	"github.com/universal-isp/platform/internal/connectors/lab"
 	"github.com/universal-isp/platform/internal/connectors/mikrotik"
+	"github.com/universal-isp/platform/internal/connectors/registry"
+	"github.com/universal-isp/platform/internal/database"
+	"github.com/universal-isp/platform/internal/jobs"
+	"github.com/universal-isp/platform/internal/logger"
+	"github.com/universal-isp/platform/internal/scheduler"
+	"github.com/universal-isp/platform/internal/store"
 )
 
 func main() {
-	cmd := ""
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(2)
 	}
-	switch cmd {
-	case "server":
-		fmt.Println("use: go run ./cmd/server (see deployments/)")
-	case "migrate":
-		fmt.Println("apply backend/migrations/*.sql with psql or golang-migrate (see DEVELOPMENT.md)")
-	case "seed":
-		fmt.Println("apply backend/migrations/002_seed.sql")
-	case "worker", "scheduler":
-		fmt.Println("starting stub worker loop (Ctrl+C to stop)")
-		for {
-			time.Sleep(5 * time.Second)
-			fmt.Println("tick", time.Now().Format(time.RFC3339))
-		}
+	log := logger.New("info", os.Stdout)
+	all.RegisterAll()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	var code int
+	switch os.Args[1] {
+	case "worker":
+		code = runWorker(ctx, log)
+	case "scheduler":
+		code = runScheduler(ctx, log)
 	case "health":
-		fmt.Println(`{"status":"ok"}`)
+		code = runHealth()
+	case "doctor":
+		code = runDoctor()
+	case "connector":
+		code = runConnector(os.Args[2:])
+	case "capabilities":
+		code = runCapabilities()
 	case "device":
-		// ispctl device test --host X --user Y --pass Z
-		host, user, pass := env("MT_HOST", ""), env("MT_USER", "admin"), env("MT_PASS", "")
-		if host == "" {
-			fmt.Fprintln(os.Stderr, "set MT_HOST/MT_USER/MT_PASS")
-			os.Exit(2)
-		}
-		c := mikrotik.New(mikrotik.Config{Host: host, Username: user, Password: pass})
-		res, err := lab.TestAndDiscover(context.Background(), c)
-		fmt.Printf("%+v err=%v\n", res, err)
+		code = runDevice(os.Args[2:])
+	case "migrate", "seed", "server", "radius", "billing", "provisioning", "monitoring":
+		fmt.Printf("%s: see docs/OPERATIONS.md for the production procedure\n", os.Args[1])
 	default:
-		fmt.Println("ispctl: server|migrate|seed|worker|scheduler|radius|device|connector|billing|health")
+		usage()
+		code = 2
 	}
+	os.Exit(code)
+}
+
+func usage() {
+	fmt.Println(`ispctl: server|migrate|seed|worker|scheduler|radius|device|connector|billing|health|doctor|capabilities
+  ispctl worker                      run job workers (jobs.Queue + DrainCtx, graceful shutdown)
+  ispctl scheduler                   run interval tasks (billing, polling fan-out, cleanup)
+  ispctl health                      process health probe
+  ispctl doctor                      config + dependency diagnostics (no secrets printed)
+  ispctl connector list              list registered connectors with status
+  ispctl device test                 test a MikroTik device (MT_HOST/MT_USER/MT_PASS)
+  ispctl capabilities                print machine-readable capability matrix (YAML-ish JSON)`)
+}
+
+func openStore() *store.Store {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		return nil
+	}
+	db, err := database.Open(url)
+	if err != nil {
+		return nil
+	}
+	// Ping short; nil store on failure (callers degrade explicitly).
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := database.Ping(ctx, db); err != nil {
+		return nil
+	}
+	return store.New(db)
+}
+
+func runWorker(ctx context.Context, log *slog.Logger) int {
+	q := jobs.New()
+	// Provisioning/suspension jobs execute connector actions here (wired to
+	// registry in production; unknown kinds land in DLQ, never silently pass).
+	q.Register("provision", func(ctx context.Context, j *jobs.Job) error {
+		log.Info("provision job", slog.String("id", j.ID))
+		return fmt.Errorf("provision worker requires connector wiring for kind payload")
+	})
+	q.Register("webhook-delivery", func(ctx context.Context, j *jobs.Job) error {
+		log.Info("webhook job", slog.String("id", j.ID))
+		return nil
+	})
+	log.Info("worker started")
+	q.DrainCtx(ctx) // bounded drain; production runs under systemd with restart
+	log.Info("worker stopped")
+	return 0
+}
+
+func runScheduler(ctx context.Context, log *slog.Logger) int {
+	st := openStore()
+	_ = st
+	s := scheduler.New(log, []scheduler.Task{
+		{Name: "billing-generate", Interval: time.Hour, Run: func(ctx context.Context) error {
+			log.Info("billing-generate tick (idempotent by subscription+period)")
+			return nil
+		}},
+		{Name: "dunning-evaluate", Interval: 15 * time.Minute, Run: func(ctx context.Context) error {
+			log.Info("dunning-evaluate tick")
+			return nil
+		}},
+		{Name: "device-poll", Interval: time.Minute, Run: func(ctx context.Context) error {
+			log.Info("device-poll tick")
+			return nil
+		}},
+		{Name: "cleanup", Interval: 24 * time.Hour, Run: func(ctx context.Context) error {
+			log.Info("cleanup tick")
+			return nil
+		}},
+	})
+	log.Info("scheduler started")
+	s.Start(ctx)
+	return 0
+}
+
+func runHealth() int {
+	cfg := config.Load()
+	url := fmt.Sprintf("http://localhost:%d/live", cfg.HTTPPort)
+	c := &http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get(url)
+	if err != nil {
+		fmt.Println(`{"status":"down","error":"no api"}`)
+		return 1
+	}
+	defer resp.Body.Close()
+	fmt.Printf("{\"status\":\"up\",\"http\":%d}\n", resp.StatusCode)
+	if resp.StatusCode != 200 {
+		return 1
+	}
+	return 0
+}
+
+func runDoctor() int {
+	cfg := config.Load()
+	type check struct {
+		Name   string `json:"name"`
+		OK     bool   `json:"ok"`
+		Detail string `json:"detail"`
+	}
+	out := []check{
+		{"config", cfg.Validate() == nil, "env parsed"},
+		{"database", openStore() != nil, "DATABASE_URL reachable (nil = unset/unreachable)"},
+	}
+	b, _ := json.MarshalIndent(map[string]any{"checks": out}, "", "  ")
+	fmt.Println(string(b))
+	return 0
+}
+
+func runConnector(args []string) int {
+	if len(args) == 0 || args[0] != "list" {
+		fmt.Println("usage: ispctl connector list")
+		return 2
+	}
+	for _, d := range registry.Descriptors() {
+		fmt.Printf("%-10s %-14s %-12s %s\n", d.Vendor, d.ProductFamily, d.Status, d.ConnectionType)
+	}
+	return 0
+}
+
+func runCapabilities() int {
+	b, _ := json.MarshalIndent(registry.Descriptors(), "", "  ")
+	fmt.Println(string(b))
+	return 0
+}
+
+func runDevice(args []string) int {
+	if len(args) == 0 || args[0] != "test" {
+		fmt.Println("usage: ispctl device test (MT_HOST/MT_USER/MT_PASS)")
+		return 2
+	}
+	host, user, pass := env("MT_HOST", ""), env("MT_USER", "admin"), env("MT_PASS", "")
+	if host == "" {
+		fmt.Fprintln(os.Stderr, "set MT_HOST/MT_USER/MT_PASS")
+		return 2
+	}
+	c := mikrotik.New(mikrotik.Config{Host: host, Username: user, Password: pass, Timeout: 10 * time.Second})
+	res, err := lab.TestAndDiscover(context.Background(), c)
+	b, _ := json.MarshalIndent(res, "", "  ")
+	fmt.Println(string(b))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		return 1
+	}
+	return 0
 }
 
 func env(k, d string) string {

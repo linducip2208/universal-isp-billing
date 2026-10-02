@@ -19,7 +19,7 @@ import (
 )
 
 func unsupported() *sdk.Capabilities {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{}}
+	return &sdk.Capabilities{}
 }
 
 // ---------- GenericRESTConnector ----------
@@ -89,7 +89,7 @@ func (c *RESTConnector) GetDeviceInfo(ctx context.Context) (*sdk.DeviceInfo, err
 	return &sdk.DeviceInfo{Vendor: "generic", Model: "generic-rest", Version: "1.0"}, nil
 }
 func (c *RESTConnector) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{sdk.CapProvisioning: sdk.StateModelDependent}}, nil
+	return sdk.NewCapabilities(sdk.Cap(sdk.CapProvisioning, sdk.Partial)), nil
 }
 func (c *RESTConnector) GetSites(_ context.Context) ([]sdk.Site, error)       { return nil, nil }
 func (c *RESTConnector) GetDevices(_ context.Context) ([]sdk.Device, error)   { return nil, nil }
@@ -189,9 +189,11 @@ func (c *RADIUSConnector) GetDeviceInfo(_ context.Context) (*sdk.DeviceInfo, err
 	return &sdk.DeviceInfo{Vendor: "generic", Model: "radius-nas"}, nil
 }
 func (c *RADIUSConnector) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{
-		sdk.CapRADIUS: sdk.StateImplemented, sdk.CapDisconnect: sdk.StateImplemented, sdk.CapCoA: sdk.StateImplemented,
-	}}, nil
+	return sdk.NewCapabilities(
+		sdk.Cap(sdk.CapRADIUS, sdk.Partial),
+		sdk.Cap(sdk.CapDisconnect, sdk.Partial),
+		sdk.Cap(sdk.CapCoA, sdk.Partial),
+	), nil
 }
 func (c *RADIUSConnector) GetSites(_ context.Context) ([]sdk.Site, error)       { return nil, nil }
 func (c *RADIUSConnector) GetDevices(_ context.Context) ([]sdk.Device, error)   { return nil, nil }
@@ -244,9 +246,14 @@ func (c *SNMPConnector) GetDeviceInfo(_ context.Context) (*sdk.DeviceInfo, error
 	return &sdk.DeviceInfo{Vendor: "generic", Model: "snmp-device"}, nil
 }
 func (c *SNMPConnector) GetCapabilities(_ context.Context) (*sdk.Capabilities, error) {
-	return &sdk.Capabilities{States: map[sdk.Capability]sdk.CapabilityState{
-		sdk.CapIfaceMonitor: sdk.StateImplemented, sdk.CapTraffic: sdk.StateImplemented,
-	}}, nil
+	return sdk.NewCapabilities(
+		sdk.Cap(sdk.CapSNMP, sdk.Partial),
+		sdk.Cap(sdk.CapInterfaces, sdk.Partial),
+		sdk.Cap(sdk.CapIfaceMonitor, sdk.Partial),
+		sdk.Cap(sdk.CapTraffic, sdk.Partial),
+		sdk.Cap(sdk.CapDeviceInfo, sdk.Partial),
+		sdk.Cap(sdk.CapDeviceHealth, sdk.Partial),
+	), nil
 }
 func (c *SNMPConnector) GetSites(_ context.Context) ([]sdk.Site, error)       { return nil, nil }
 func (c *SNMPConnector) GetDevices(_ context.Context) ([]sdk.Device, error)   { return nil, nil }

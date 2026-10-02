@@ -1,32 +1,76 @@
 import React, { useEffect, useState } from 'react'
+import { api } from '../api/client'
+
+// Route -> API resource mapping. Unknown routes render an honest
+// "not wired yet" state instead of fabricated rows.
+const ROUTES: Record<string, { api: string; cols: string[] }> = {
+  '/customers': { api: '/api/v1/customers', cols: ['name', 'email', 'phone', 'status'] },
+  '/subscriptions': { api: '/api/v1/subscriptions', cols: ['username', 'service', 'status'] },
+  '/packages': { api: '/api/v1/packages', cols: ['name', 'price_cents', 'service'] },
+  '/devices': { api: '/api/v1/devices', cols: ['vendor', 'model', 'host', 'status'] },
+  '/alerts': { api: '/api/v1/alerts', cols: ['severity', 'title', 'status'] },
+  '/events': { api: '/api/v1/events', cols: ['type', 'actor', 'resource'] },
+  '/provisioning': { api: '/api/v1/provisioning/jobs', cols: ['kind', 'status', 'attempts'] },
+  '/topology': { api: '/api/v1/topology', cols: [] },
+}
 
 export function Page({ k }: { k: string }) {
-  const [data, setData] = useState<any>(null)
+  const [rows, setRows] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState('')
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
+  const route = ROUTES[k]
+
   useEffect(() => {
-    fetch('/api/v1/noc/summary', { headers: { Authorization: 'Bearer demo' } })
-      .then(r => (r.ok ? r.json() : Promise.reject(r.statusText)))
-      .then(setData)
-      .catch(() => setErr('API offline — showing seeded demo state'))
-  }, [k])
+    if (!route) { setLoading(false); return }
+    setLoading(true); setErr('')
+    api(`${route.api}?page=${page}&per_page=15&search=${encodeURIComponent(q)}`)
+      .then(j => {
+        if (j.nodes) { setRows(j.nodes); setTotal(j.nodes.length) }
+        else { setRows(j.data ?? []); setTotal(j.total ?? 0) }
+      })
+      .catch((e: any) => setErr(String(e.message || e)))
+      .finally(() => setLoading(false))
+  }, [k, page, q])
+
+  if (!route) {
+    return (
+      <div className="page"><h2>{k}</h2>
+        <div className="empty">Module API not wired yet — tracked as PLANNED, no fake data shown.</div>
+      </div>
+    )
+  }
   return (
     <div className="page">
       <h2>{k}</h2>
-      {err && <div className="empty">{err}</div>}
-      <div className="cards">
-        {['Active subscribers', 'Online sessions', 'Online devices', 'Critical alerts'].map((c, i) => (
-          <div className="card" key={c}><div className="ct">{c}</div><div className="cv">{[1240, 986, 10, 1][i]}</div></div>
-        ))}
+      <div className="toolbar">
+        <input placeholder="Search" value={search} onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { setPage(1); setQ(search) } }} />
+        <button onClick={() => { setPage(1); setQ(search) }}>Search</button>
       </div>
-      <div className="card">
-        <div className="ct">Live summary (GET /api/v1/noc/summary)</div>
-        <pre>{JSON.stringify(data ?? { seeded: true }, null, 2)}</pre>
-      </div>
-      <div className="card">
-        <div className="ct">Table</div>
-        <table><thead><tr><th>Name</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody><tr><td>Demo row</td><td><span className="badge ok">active</span></td><td>View</td></tr></tbody></table>
-      </div>
+      {loading && <div className="card skeleton">Loading…</div>}
+      {!loading && err && <div className="empty">API error: {err} (empty state — nothing fabricated)</div>}
+      {!loading && !err && rows.length === 0 && <div className="empty">No data — empty state.</div>}
+      {!loading && !err && rows.length > 0 && (
+        <div className="card">
+          <table><thead><tr>{route.cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+            <tbody>{rows.map((r: any, i: number) => (
+              <tr key={i}>{route.cols.map(c => (
+                <td key={c}>{c === 'status' || c === 'severity'
+                  ? <span className="badge ok">{String(r[c] ?? '')}</span>
+                  : String(r[c] ?? '')}</td>
+              ))}</tr>
+            ))}</tbody></table>
+          <div className="pager">
+            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
+            <span>{page} / {Math.max(1, Math.ceil(total / 15))} ({total})</span>
+            <button disabled={page * 15 >= total} onClick={() => setPage(p => p + 1)}>›</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

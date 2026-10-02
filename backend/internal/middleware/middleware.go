@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -23,7 +25,57 @@ func Logging(log *slog.Logger) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			next.ServeHTTP(w, r)
-			log.Info("http", "method", r.Method, "path", r.URL.Path, "dur_ms", time.Since(start).Milliseconds(), "ip", r.RemoteAddr)
+			// Never log tokens, passwords, or secrets.
+			log.Info("http", "method", r.Method, "path", r.URL.Path,
+				"dur_ms", time.Since(start).Milliseconds(),
+				"req_id", r.Header.Get("X-Request-ID"))
+		})
+	}
+}
+
+// RequestID attaches/propagates X-Request-ID for audit correlation.
+func RequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if id == "" {
+			var b [8]byte
+			_, _ = rand.Read(b[:])
+			id = hex.EncodeToString(b[:])
+		}
+		w.Header().Set("X-Request-ID", id)
+		r.Header.Set("X-Request-ID", id)
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Error writes the consistent API error envelope.
+func Error(w http.ResponseWriter, code int, msg, reqID string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = w.Write([]byte(`{"error":"` + msg + `","request_id":"` + reqID + `"}`))
+}
+
+// CORS enforces an explicit origin allowlist. Empty allowlist = same-origin
+// only (no ACAO headers emitted).
+func CORS(allowed []string) func(http.Handler) http.Handler {
+	set := map[string]bool{}
+	for _, o := range allowed {
+		set[o] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin != "" && set[origin] {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
+			}
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }
@@ -46,6 +98,7 @@ func JWT(secret string) func(http.Handler) http.Handler {
 				return
 			}
 			ctx := rbac.WithRoles(r.Context(), cl.Roles)
+			ctx = rbac.WithOrg(ctx, cl.Organization)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

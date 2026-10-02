@@ -2,7 +2,9 @@
 
 Transport: RouterOS API (8728), API-SSL (8729), REST (`/rest`).
 Auth: username/password. Test: `/system/resource/print`.
-Capabilities: PPPoE, Hotspot, RADIUS, Queue, DHCP, Firewall, interface
-monitoring, disconnect, provisioning — VERIFIED at transport level via
-mock-transport tests; hardware E2E via `ispctl device test` (set
-MT_HOST/MT_USER/MT_PASS). Integration tests: `mikrotik_test.go`.
+Ops: device info/health, interfaces, traffic, DHCP leases, PPP secrets/active,
+queues, PPP profiles, IP pools, hotspot users, identity, /export backup,
+/system/reboot (audited), provision/suspend/activate/disconnect/delete/update.
+Status: PARTIAL — protocol tests vs scripted fake (`mikrotik_test.go`);
+hardware E2E via `MIKROTIK_E2E=true` + `MIKROTIK_HOST/PORT/USERNAME/PASSWORD/TLS`
+(never commit credentials). Promotion to VERIFIED requires a passing E2E run.
