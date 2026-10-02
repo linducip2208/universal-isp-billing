@@ -33,7 +33,7 @@ func sendRecv(t *testing.T, addr string, pkt *radius.Packet, secret string) *rad
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	if _, err := conn.Write(radius.Encode(pkt, secret, pkt.Authenticator)); err != nil {
+	if _, err := conn.Write(radius.EncodeRequest(pkt)); err != nil {
 		t.Fatal(err)
 	}
 	buf := make([]byte, 4096)
@@ -78,15 +78,25 @@ func TestServerWiring(t *testing.T) {
 	go func() { _ = srv.ServeCtx(ctx, authAddr, acctAddr) }()
 	time.Sleep(100 * time.Millisecond)
 
-	// 1. auth accept
-	got := sendRecv(t, authAddr, &radius.Packet{Code: radius.CodeAccessRequest, Identifier: 10,
-		Attrs: []radius.Attr{{Type: 1, Value: []byte("alice")}, {Type: 2, Value: []byte("pw")}}}, "s3cret")
+	// 1. auth accept — password sent RFC-2865-encrypted like a real NAS
+	authReq := func(id byte, user, pass string) *radius.Packet {
+		var ra [16]byte
+		for i := range ra {
+			ra[i] = id + byte(i)
+		}
+		ct, err := radius.EncryptPAP("s3cret", ra, pass)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &radius.Packet{Code: radius.CodeAccessRequest, Identifier: id, Authenticator: ra,
+			Attrs: []radius.Attr{{Type: 1, Value: []byte(user)}, {Type: 2, Value: ct}}}
+	}
+	got := sendRecv(t, authAddr, authReq(10, "alice", "pw"), "s3cret")
 	if got.Code != radius.CodeAccessAccept {
 		t.Fatalf("want accept, got %d", got.Code)
 	}
 	// 2. bad password -> reject
-	got = sendRecv(t, authAddr, &radius.Packet{Code: radius.CodeAccessRequest, Identifier: 11,
-		Attrs: []radius.Attr{{Type: 1, Value: []byte("alice")}, {Type: 2, Value: []byte("no")}}}, "s3cret")
+	got = sendRecv(t, authAddr, authReq(11, "alice", "no"), "s3cret")
 	if got.Code != radius.CodeAccessReject {
 		t.Fatalf("want reject, got %d", got.Code)
 	}

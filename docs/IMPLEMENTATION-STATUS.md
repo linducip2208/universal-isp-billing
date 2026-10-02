@@ -28,15 +28,21 @@ Single shared connector registry (`connectors/all`) for API + CLI.
   in code), round-trip + wrong-key + salt-uniqueness tests; agent interop
   still E2E-gated.
 - CWMP subset (`internal/cwmp`, implements `tr069.ACS`): Inform ingestion,
-  device registry, Get/SetParameterValues + Reboot task queue served as SOAP,
-  honest empty-session handling; fake-CPE tests. Full session/auth/file
-  transfer PLANNED.
-- Frontend: vitest + jsdom + testing-library (7 tests: i18n, Login render,
-  NOC live/error states, Lab form); `lang.tsx` split so pages import no app
-  side effects; `npm test` + build green.
+  device registry, Get/SetParameterValues + Reboot + Download (firmware)
+  tasks, file staging endpoint (authed upload, capability-URL download),
+  Basic + Digest-MD5 CPE auth, retry-storm guard (20/min shedding + NOC
+  suspects); fake-CPE tests. Session retry/file-chunk remainder PLANNED.
+- Frontend: vitest + jsdom + testing-library (10 tests: i18n, Login, NOC
+  live/error, Lab, Billing rows/empty, Connectors no-secrets); `lang.tsx`
+  split; `npm test` + build green.
 - RADIUS server fully wired (2026-10-02): NAS authorization, anti-replay
   dedup on the wire, usage aggregation from Interim counters, Start/Stop
   session tracking — proven by loopback test (accept/reject/start/interim/stop).
+- RADIUS hardening (2026-10-02): RFC 2865 PAP encrypt/decrypt (server
+  decrypts real NAS ciphertext, plaintext fallback documented for test
+  clients), `EncodeRequest` preserving the request authenticator, RadSec
+  TLS transport (RFC 6614 framing) with loopback test.
+  `Serve` now runs auth+acct concurrently via `ServeCtx`.
 - Global Redis rate limiting (fail-open documented) layered under per-org limits.
 - CWMP: digest/basic auth + Download (firmware) RPC; session/file-transfer
   remainder still PLANNED.

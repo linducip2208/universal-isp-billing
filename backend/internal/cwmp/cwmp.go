@@ -54,11 +54,12 @@ type Server struct {
 	last    map[string]time.Time
 	tasks   map[string][]tr069.Task
 	params  map[string]map[string]string // serial -> name -> value (last known)
+	storm   map[string][]time.Time       // inform arrival times per serial
 }
 
 func NewServer() *Server {
 	return &Server{devices: map[string]tr069.DeviceID{}, last: map[string]time.Time{},
-		tasks: map[string][]tr069.Task{}, params: map[string]map[string]string{}}
+		tasks: map[string][]tr069.Task{}, params: map[string]map[string]string{}, storm: map[string][]time.Time{}}
 }
 
 func (s *Server) IngestInform(_ context.Context, in tr069.Inform) error {
@@ -138,6 +139,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var env envelope
 	if err := xml.Unmarshal(body, &env); err != nil || env.Body.Inform == nil {
 		// Unknown/unsupported RPC: honest empty (session continues).
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// Storm guard: shed load from chattering CPEs (still counted for NOC).
+	if serial := env.Body.Inform.DeviceID.SerialNumber; serial != "" && s.noteInform(serial) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

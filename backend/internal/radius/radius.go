@@ -71,6 +71,24 @@ func Encode(p *Packet, secret string, reqAuth [16]byte) []byte {
 	return buf
 }
 
+// EncodeRequest serializes an Access-/Accounting-Request, preserving the
+// random request authenticator (needed for PAP hiding). Encode (above) is
+// for responses, where the authenticator becomes the ResponseAuth.
+func EncodeRequest(p *Packet) []byte {
+	attrs := []byte{}
+	for _, a := range p.Attrs {
+		attrs = append(attrs, a.Type, byte(len(a.Value)+2))
+		attrs = append(attrs, a.Value...)
+	}
+	buf := make([]byte, 20+len(attrs))
+	buf[0] = p.Code
+	buf[1] = p.Identifier
+	binary.BigEndian.PutUint16(buf[2:4], uint16(20+len(attrs)))
+	copy(buf[4:20], p.Authenticator[:])
+	copy(buf[20:], attrs)
+	return buf
+}
+
 // Decode parses a datagram; secret is used only by callers for verification.
 func Decode(b []byte) (*Packet, error) {
 	if len(b) < 20 {
@@ -199,9 +217,19 @@ func responsePacket(code, id byte, attrs []Attr) *Packet {
 	return &Packet{Code: code, Identifier: id, Attrs: attrs}
 }
 
-func (s *Server) handleAuth(pkt *Packet, addr *net.UDPAddr) *Packet {
+func (s *Server) handleAuth(pkt *Packet) *Packet {
 	user := pkt.GetString(1)
-	pass := pkt.GetString(2)
+	// User-Password arrives MD5-hidden per RFC 2865; decrypt first. A bare
+	// plaintext attribute (loopback/test clients) is accepted as fallback —
+	// real NASes always send ciphertext.
+	pass := ""
+	if raw := pkt.Get(2); raw != nil {
+		if dec, err := DecryptPAP(s.Secret, pkt.Authenticator, raw); err == nil {
+			pass = dec
+		} else {
+			pass = string(raw)
+		}
+	}
 	if s.Verify != nil {
 		if attrs, ok := s.Verify(user, pass); ok {
 			var out []Attr
@@ -299,33 +327,12 @@ func (s *Server) serveOne(ctx context.Context, addr string, isAuth bool) error {
 			if !isAuth {
 				continue
 			}
-			resp = s.handleAuth(pkt, remote)
+			resp = s.handleAuth(pkt)
 		case CodeAccountingReq:
 			if isAuth {
 				continue
 			}
-			// Track Start/Interim/Stop via Acct-Status-Type (40).
-			sid := pkt.GetString(44)
-			if sid == "" {
-				sid = fmt.Sprintf("%s-%d", remote.String(), pkt.Identifier)
-			}
-			user := pkt.GetString(1)
-			switch string(pkt.Get(40)) {
-			case string([]byte{1}): // Start
-				s.Sessions.Start(&Session{Username: user, NASIP: ip, AcctSessionID: sid})
-			case string([]byte{3}): // Interim-Update
-				in, out := u32(pkt.Get(42)), u32(pkt.Get(43))
-				s.Sessions.Interim(sid, int64(in), int64(out))
-				if s.Usage != nil {
-					s.Usage.Interim(user, sid, int64(in), int64(out))
-				}
-			case string([]byte{2}): // Stop
-				s.Sessions.Stop(sid)
-				if s.Usage != nil {
-					s.Usage.Stop(sid)
-				}
-			}
-			resp = responsePacket(CodeAccountingResp, pkt.Identifier, nil)
+			resp = s.handleAccounting(pkt, ip)
 		default:
 			continue
 		}
@@ -342,4 +349,30 @@ func u32(b []byte) uint32 {
 		return 0
 	}
 	return uint32(b[0])<<24 | uint32(b[1])<<16 | uint32(b[2])<<8 | uint32(b[3])
+}
+
+// handleAccounting tracks Start/Interim/Stop (Acct-Status-Type 40) and feeds
+// usage aggregation. Shared by UDP and RadSec transports.
+func (s *Server) handleAccounting(pkt *Packet, ip string) *Packet {
+	sid := pkt.GetString(44)
+	if sid == "" {
+		sid = fmt.Sprintf("%s-%d", ip, pkt.Identifier)
+	}
+	user := pkt.GetString(1)
+	switch string(pkt.Get(40)) {
+	case string([]byte{1}): // Start
+		s.Sessions.Start(&Session{Username: user, NASIP: ip, AcctSessionID: sid})
+	case string([]byte{3}): // Interim-Update
+		in, out := u32(pkt.Get(42)), u32(pkt.Get(43))
+		s.Sessions.Interim(sid, int64(in), int64(out))
+		if s.Usage != nil {
+			s.Usage.Interim(user, sid, int64(in), int64(out))
+		}
+	case string([]byte{2}): // Stop
+		s.Sessions.Stop(sid)
+		if s.Usage != nil {
+			s.Usage.Stop(sid)
+		}
+	}
+	return responsePacket(CodeAccountingResp, pkt.Identifier, nil)
 }
