@@ -1,8 +1,13 @@
 import React, { createContext, useContext, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { en, id, Lang } from './i18n/dict'
 import { Page } from './pages/Page'
+import { Login } from './pages/Login'
+import { NOC } from './pages/NOC'
+import { Connectors, Matrix } from './pages/Connectors'
+import { Lab } from './pages/Lab'
+import { Invoices, Payments } from './pages/Billing'
 
 const LangCtx = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => void } | any>({})
 export const useLang = () => useContext(LangCtx)
@@ -23,6 +28,8 @@ function Shell() {
   const [dark, setDark] = useState(false)
   const loc = useLocation()
   const ctx: any = useContext(LangCtx)
+  const authed = !!localStorage.getItem('isp_token')
+  function logout() { localStorage.removeItem('isp_token'); location.hash = '#/login' }
   return (
     <div className={dark ? 'app dark' : 'app'}>
       <aside className="sidebar">
@@ -39,10 +46,20 @@ function Shell() {
         <header className="topbar">
           <strong>{ctx.t('noc.title')}</strong>
           <span className="sp" />
+          {!authed
+            ? <Link to="/login">{ctx.t('auth.login')}</Link>
+            : <button onClick={logout}>{ctx.t('auth.logout')}</button>}
           <button onClick={() => ctx.setLang(ctx.lang === 'en' ? 'id' : 'en')}>{ctx.lang === 'en' ? 'ID' : 'EN'}</button>
           <button onClick={() => setDark(!dark)}>{dark ? '☀' : '☾'}</button>
         </header>
         <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/noc" element={<NOC />} />
+          <Route path="/connectors" element={<Connectors />} />
+          <Route path="/matrix" element={<Matrix />} />
+          <Route path="/lab" element={<Lab />} />
+          <Route path="/invoices" element={<Invoices />} />
+          <Route path="/payments" element={<Payments />} />
           <Route path="/" element={<Page k="nav.dashboard" />} />
           <Route path="*" element={<Page k={loc.pathname} />} />
         </Routes>
@@ -56,7 +73,7 @@ function App() {
   const t = (k: string) => (lang === 'id' ? (id[k] ?? en[k] ?? k) : (en[k] ?? k))
   return (
     <LangCtx.Provider value={{ lang, setLang, t }}>
-      <BrowserRouter><Shell /></BrowserRouter>
+      <HashRouter><Shell /></HashRouter>
     </LangCtx.Provider>
   )
 }

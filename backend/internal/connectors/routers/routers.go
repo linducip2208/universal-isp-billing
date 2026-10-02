@@ -70,7 +70,7 @@ var Factories = map[string]func(map[string]string) (sdk.NetworkConnector, error)
 	"cisco-ios":     mk("Cisco", "IOS/XE", sdk.ConnSSH),
 	"juniper-junos": mk("Juniper", "Junos", sdk.ConnNETCONF),
 	"huawei-vrp":    mk("Huawei", "VRP", sdk.ConnSSH),
-	"zte-zxhn":      mk("ZTE", "ZXค่าฯ", sdk.ConnSSH),
+	"zte-zxhn":      mk("ZTE", "ZXAN", sdk.ConnSSH),
 	"nokia-sros":    mk("Nokia", "SR OS", sdk.ConnNETCONF),
 	"vyos":          mk("VyOS", "VyOS", sdk.ConnRESTCONF),
 	"edge-router":   mk("Ubiquiti", "EdgeRouter", sdk.ConnSSH),
