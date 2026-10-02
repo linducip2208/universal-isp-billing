@@ -1,0 +1,14 @@
+[Unit]
+Description=Universal ISP Platform API
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=isp
+EnvironmentFile=/etc/isp/platform.env
+ExecStart=/opt/isp/bin/server
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

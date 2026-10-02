@@ -1,0 +1,66 @@
+package rbac
+
+import "context"
+
+// Permission is a coarse-grained action string, e.g. "customers:write".
+type Permission string
+
+const (
+	CustomersRead  Permission = "customers:read"
+	CustomersWrite Permission = "customers:write"
+	BillingRead    Permission = "billing:read"
+	BillingWrite   Permission = "billing:write"
+	NetworkRead    Permission = "network:read"
+	NetworkWrite   Permission = "network:write"
+	ProvisionExec  Permission = "provisioning:execute"
+	SystemAdmin    Permission = "system:admin"
+)
+
+// Role maps to a permission set.
+type Role struct {
+	Name        string
+	Permissions []Permission
+}
+
+var defaults = map[string]Role{
+	"superadmin": {Name: "superadmin", Permissions: []Permission{CustomersRead, CustomersWrite, BillingRead, BillingWrite, NetworkRead, NetworkWrite, ProvisionExec, SystemAdmin}},
+	"admin":      {Name: "admin", Permissions: []Permission{CustomersRead, CustomersWrite, BillingRead, BillingWrite, NetworkRead, NetworkWrite, ProvisionExec}},
+	"noc":        {Name: "noc", Permissions: []Permission{CustomersRead, BillingRead, NetworkRead, ProvisionExec}},
+	"billing":    {Name: "billing", Permissions: []Permission{CustomersRead, BillingRead, BillingWrite}},
+	"support":    {Name: "support", Permissions: []Permission{CustomersRead, BillingRead, NetworkRead}},
+	"viewer":     {Name: "viewer", Permissions: []Permission{CustomersRead, BillingRead, NetworkRead}},
+}
+
+type ctxKey struct{}
+
+func WithRoles(ctx context.Context, roles []string) context.Context {
+	return context.WithValue(ctx, ctxKey{}, roles)
+}
+
+func rolesOf(ctx context.Context) []string {
+	v, _ := ctx.Value(ctxKey{}).([]string)
+	return v
+}
+
+// Can reports whether any role in ctx grants p.
+func Can(ctx context.Context, p Permission) bool {
+	for _, r := range rolesOf(ctx) {
+		role, ok := defaults[r]
+		if !ok {
+			continue
+		}
+		for _, perm := range role.Permissions {
+			if perm == p || perm == SystemAdmin {
+				return true
+			}
+		}
+		// superadmin wildcard
+		if r == "superadmin" {
+			return true
+		}
+		_ = role
+	}
+	return false
+}
+
+func DefaultRoles() map[string]Role { return defaults }

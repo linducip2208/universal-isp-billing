@@ -1,0 +1,78 @@
+# Machine-readable vendor registry. Status values:
+# PLANNED | IN_DEVELOPMENT | IMPLEMENTED | VERIFIED | MODEL_DEPENDENT |
+# REQUIRES_VENDOR_ACCESS | DEPRECATED
+# VERIFIED requires a real connection test or documented API test (see verified_at/evidence).
+- vendor: MikroTik
+  product_family: RouterOS
+  connection_type: cli
+  api_type: routeros-api
+  authentication: password
+  capabilities: [pppoe, hotspot, radius, queue, dhcp, firewall, interface_monitoring, disconnect, provisioning]
+  documentation_url: docs/connectors/mikrotik.md
+  status: VERIFIED
+  verified_at: null
+  evidence: mock-transport unit tests; hardware verification pending (see CONNECTORS.md)
+- vendor: Ruijie
+  product_family: Cloud
+  connection_type: cloud_api
+  api_type: rest
+  authentication: oauth2/api-key
+  capabilities: [client_list, traffic, site_discovery]
+  documentation_url: docs/connectors/ruijie-cloud.md
+  status: REQUIRES_VENDOR_ACCESS
+- vendor: Ruijie
+  product_family: Reyee
+  connection_type: cloud_api
+  api_type: rest
+  authentication: oauth2/api-key
+  capabilities: [client_list, traffic]
+  documentation_url: docs/connectors/reyee.md
+  status: REQUIRES_VENDOR_ACCESS
+- vendor: Ubiquiti
+  product_family: UniFi
+  connection_type: cloud_api
+  api_type: rest
+  authentication: api-key
+  capabilities: [client_list, traffic, hotspot, voucher, disconnect]
+  documentation_url: docs/connectors/unifi.md
+  status: REQUIRES_VENDOR_ACCESS
+- vendor: TP-Link
+  product_family: Omada
+  connection_type: cloud_api
+  api_type: rest
+  authentication: api-key
+  capabilities: [client_list, traffic, site_discovery]
+  documentation_url: docs/connectors/omada.md
+  status: REQUIRES_VENDOR_ACCESS
+- vendor: Cisco
+  product_family: Meraki
+  connection_type: cloud_api
+  api_type: rest
+  authentication: api-key
+  capabilities: [client_list, traffic, site_discovery]
+  documentation_url: docs/connectors/meraki.md
+  status: REQUIRES_VENDOR_ACCESS
+- vendor: Generic
+  product_family: RADIUS
+  connection_type: radius
+  api_type: radius
+  authentication: shared-secret
+  capabilities: [radius, disconnect, coa]
+  documentation_url: docs/connectors/generic.md
+  status: IMPLEMENTED
+- vendor: Generic
+  product_family: SNMP
+  connection_type: snmp
+  api_type: snmp
+  authentication: community/v3
+  capabilities: [interface_monitoring, traffic]
+  documentation_url: docs/connectors/generic.md
+  status: IMPLEMENTED
+- vendor: Generic
+  product_family: REST
+  connection_type: generic_http
+  api_type: rest
+  authentication: token/basic
+  capabilities: [provisioning]
+  documentation_url: docs/connectors/generic.md
+  status: IMPLEMENTED

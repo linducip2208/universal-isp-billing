@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Universal ISP Platform API
+  version: 1.0.0
+servers:
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: {type: string}
+                password: {type: string}
+      responses:
+        '200': {description: OK}
+  /customers:
+    get: {summary: List customers, responses: {'200': {description: OK}}}
+  /subscriptions:
+    get: {summary: List subscriptions, responses: {'200': {description: OK}}}
+  /packages:
+    get: {summary: List packages, responses: {'200': {description: OK}}}
+  /invoices:
+    get: {summary: List invoices, responses: {'200': {description: OK}}}
+  /payments:
+    get: {summary: List payments, responses: {'200': {description: OK}}}
+  /devices:
+    get: {summary: List devices, responses: {'200': {description: OK}}}
+  /connectors:
+    get: {summary: List connectors, responses: {'200': {description: OK}}}
+  /noc/summary:
+    get: {summary: NOC summary, responses: {'200': {description: OK}}}
+  /provisioning/jobs:
+    get: {summary: Provisioning jobs, responses: {'200': {description: OK}}}
+  /monitoring/devices:
+    get: {summary: Device monitoring, responses: {'200': {description: OK}}}
+  /alerts:
+    get: {summary: Alerts, responses: {'200': {description: OK}}}
+  /vendor-matrix:
+    get: {summary: Vendor matrix, responses: {'200': {description: OK}}}
