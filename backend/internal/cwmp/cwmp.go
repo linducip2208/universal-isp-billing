@@ -45,8 +45,11 @@ type informReq struct {
 }
 
 // Server is an ACS: device registry + task queue + HTTP endpoint.
+// Set Users to require CPE authentication (empty = open lab mode).
 type Server struct {
 	mu      sync.RWMutex
+	Users   map[string]string
+	Realm   string
 	devices map[string]tr069.DeviceID // serial -> id
 	last    map[string]time.Time
 	tasks   map[string][]tr069.Task
@@ -114,6 +117,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "CWMP requires POST", http.StatusMethodNotAllowed)
 		return
 	}
+	if !CheckAuth(s.Users, r) {
+		realm := s.Realm
+		if realm == "" {
+			realm = "acs"
+		}
+		Challenge(w, realm)
+		return
+	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
 		http.Error(w, "bad body", http.StatusBadRequest)
@@ -174,6 +185,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "Reboot":
 		_, _ = w.Write([]byte(soapReboot()))
 		_ = s.AckTask(r.Context(), serial, "Reboot") // fire-and-forget RPC
+	case "Download":
+		url := t.Params["url"]
+		_, _ = w.Write([]byte(soapDownload(url)))
+		_ = s.AckTask(r.Context(), serial, "Download")
 	default:
 		_, _ = w.Write([]byte(soapInformResponse()))
 	}
@@ -209,6 +224,10 @@ func soapSetParams(names, vals []string) string {
 
 func soapReboot() string {
 	return `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><cwmp:Reboot xmlns:cwmp="urn:dslforum-org:cwmp-1-0"><CommandKey></CommandKey></cwmp:Reboot></soap:Body></soap:Envelope>`
+}
+
+func soapDownload(url string) string {
+	return `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><cwmp:Download xmlns:cwmp="urn:dslforum-org:cwmp-1-0"><CommandKey></CommandKey><FileType>1 Firmware Upgrade Image</FileType><URL>` + xmlEscape(url) + `</URL><Username></Username><Password></Password><FileSize>0</FileSize><TargetFileName></TargetFileName></cwmp:Download></soap:Body></soap:Envelope>`
 }
 
 func xmlEscape(s string) string {

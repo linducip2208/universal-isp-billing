@@ -26,6 +26,7 @@ type Server struct {
 	store       *store.Store
 	revoker     auth.Revoker
 	bf          bruteforce.Tracker
+	glimit      middleware.DoFunc
 	demoLogin   bool
 	corsOrigins []string
 	throttle    *loginThrottle
@@ -47,6 +48,7 @@ func (s *Server) WithCORS(origins []string) *Server { s.corsOrigins = origins; r
 func (s *Server) WithRedis(r *cache.Redis) *Server {
 	s.revoker = &auth.RedisRevoker{Do: r.Do}
 	s.bf = &bruteforce.Redis{Do: r.Do, Max: 10, Window: 15 * time.Minute, Prefix: "isp:loginfail:"}
+	s.glimit = r.Do
 	return s
 }
 
@@ -56,6 +58,7 @@ func (s *Server) Handler() http.Handler {
 		middleware.CORS(s.corsOrigins),
 		middleware.Logging(s.log),
 		middleware.RateLimit(300, time.Minute),
+		middleware.GlobalLimit(s.glimit, 1200, time.Minute, "isp:rl:"),
 		middleware.PerOrgRateLimit(600, time.Minute),
 		middleware.JWT(s.jwtSecret, s.revoker),
 	)

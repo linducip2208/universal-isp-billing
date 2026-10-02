@@ -31,8 +31,17 @@ Single shared connector registry (`connectors/all`) for API + CLI.
   device registry, Get/SetParameterValues + Reboot task queue served as SOAP,
   honest empty-session handling; fake-CPE tests. Full session/auth/file
   transfer PLANNED.
-- Frontend: vitest + jsdom + testing-library (4 tests: i18n, Login render);
-  `lang.tsx` split so pages import no app side effects; `npm test` + build green.
+- Frontend: vitest + jsdom + testing-library (7 tests: i18n, Login render,
+  NOC live/error states, Lab form); `lang.tsx` split so pages import no app
+  side effects; `npm test` + build green.
+- RADIUS server fully wired (2026-10-02): NAS authorization, anti-replay
+  dedup on the wire, usage aggregation from Interim counters, Start/Stop
+  session tracking — proven by loopback test (accept/reject/start/interim/stop).
+- Global Redis rate limiting (fail-open documented) layered under per-org limits.
+- CWMP: digest/basic auth + Download (firmware) RPC; session/file-transfer
+  remainder still PLANNED.
+- Workflow integration tests (`e2eflows`): overdue→dunning→automation→drift→
+  suspend and pay→reconcile→automation→drift→activate across real packages.
 - Operations domain (2026-10-02): incidents + deterministic correlation
   (child-absorption, severity roll-up), topology impact/paths ("who is
   affected"), read-only digital twin (failure sim, hot links, headroom),
