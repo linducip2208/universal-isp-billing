@@ -14,6 +14,8 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/universal-isp/platform/internal/metrics"
 )
 
 const (
@@ -244,6 +246,7 @@ type Server struct {
 	NAS      *NASStore
 	Dedup    *Dedup
 	Usage    *UsageStore
+	Meter    *metrics.Registry
 }
 
 func responsePacket(code, id byte, attrs []Attr) *Packet {
@@ -265,6 +268,7 @@ func (s *Server) handleAuth(pkt *Packet) *Packet {
 	}
 	if s.Verify != nil {
 		if attrs, ok := s.Verify(user, pass); ok {
+			s.meterInc("radius_auth", map[string]string{"result": "accept"})
 			var out []Attr
 			for k, v := range attrs {
 				// Map common keys to standard attrs; vendor keys pass through as VSA text for now.
@@ -283,6 +287,7 @@ func (s *Server) handleAuth(pkt *Packet) *Packet {
 			return responsePacket(CodeAccessAccept, pkt.Identifier, out)
 		}
 	}
+	s.meterInc("radius_auth", map[string]string{"result": "reject"})
 	return responsePacket(CodeAccessReject, pkt.Identifier, nil)
 }
 
@@ -334,6 +339,7 @@ func (s *Server) serveOne(ctx context.Context, addr string, isAuth bool) error {
 		// NAS authorization: unknown/disabled sources get nothing.
 		if s.NAS != nil {
 			if _, ok := s.NAS.Authorized(ip); !ok {
+				s.meterInc("radius_nas", map[string]string{"result": "rejected"})
 				if isAuth {
 					rej := responsePacket(CodeAccessReject, buf[1], nil)
 					var auth [16]byte
@@ -350,6 +356,7 @@ func (s *Server) serveOne(ctx context.Context, addr string, isAuth bool) error {
 		// Anti-replay: retransmits get the cached response bytes.
 		if s.Dedup != nil {
 			if cached, ok := s.Dedup.Get(ip, pkt.Identifier, pkt.Authenticator); ok {
+				s.meterInc("radius_dedup", map[string]string{"result": "hit"})
 				_, _ = conn.WriteToUDP(cached, remote)
 				continue
 			}
@@ -392,7 +399,9 @@ func (s *Server) handleAccounting(pkt *Packet, ip string) *Packet {
 		sid = fmt.Sprintf("%s-%d", ip, pkt.Identifier)
 	}
 	user := pkt.GetString(1)
-	switch string(pkt.Get(40)) {
+	status := string(pkt.Get(40))
+	s.meterInc("radius_acct", map[string]string{"status": statusName(status)})
+	switch status {
 	case string([]byte{1}): // Start
 		s.Sessions.Start(&Session{Username: user, NASIP: ip, AcctSessionID: sid})
 	case string([]byte{3}): // Interim-Update

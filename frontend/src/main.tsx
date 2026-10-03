@@ -11,6 +11,7 @@ import { Connectors, Matrix } from './pages/Connectors'
 import { Lab } from './pages/Lab'
 import { Invoices, Payments } from './pages/Billing'
 import { Copilot, ServiceHealth, Economics } from './pages/Ops'
+import { Customers } from './pages/Customers'
 import { Customer360, DeviceDetail, Incidents } from './pages/Premium'
 import { useLang } from './lang'
 
@@ -69,6 +70,7 @@ function Shell() {
           <Route path="/customer360" element={<Customer360 />} />
           <Route path="/device" element={<DeviceDetail />} />
           <Route path="/incidents" element={<Incidents />} />
+          <Route path="/customers" element={<Customers />} />
           <Route path="/" element={<Page k="nav.dashboard" />} />
           <Route path="*" element={<Page k={loc.pathname} />} />
         </Routes>

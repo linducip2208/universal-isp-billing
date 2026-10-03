@@ -48,6 +48,13 @@ func OrgOf(ctx context.Context) string {
 	return v
 }
 
+type scopeKey struct{}
+
+// WithScopes carries API-key scopes (permission strings like "billing:read").
+func WithScopes(ctx context.Context, scopes []string) context.Context {
+	return context.WithValue(ctx, scopeKey{}, scopes)
+}
+
 func rolesOf(ctx context.Context) []string {
 	v, _ := ctx.Value(ctxKey{}).([]string)
 	return v
@@ -56,8 +63,15 @@ func rolesOf(ctx context.Context) []string {
 // RolesOf exposes caller roles for services (e.g. copilot permission checks).
 func RolesOf(ctx context.Context) []string { return rolesOf(ctx) }
 
-// Can reports whether any role in ctx grants p.
+// Can reports whether any role in ctx grants p (roles or API-key scopes).
 func Can(ctx context.Context, p Permission) bool {
+	if scopes, _ := ctx.Value(scopeKey{}).([]string); scopes != nil {
+		for _, sc := range scopes {
+			if sc == string(p) || sc == string(SystemAdmin) || sc == "*" {
+				return true
+			}
+		}
+	}
 	for _, r := range rolesOf(ctx) {
 		role, ok := defaults[r]
 		if !ok {

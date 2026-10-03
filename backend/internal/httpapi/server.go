@@ -66,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 		middleware.Metrics(s.meter),
 		middleware.CORS(s.corsOrigins),
 		middleware.Logging(s.log),
+		middleware.APIKey(s.store),
 		middleware.RateLimit(300, time.Minute),
 		middleware.GlobalLimit(s.glimit, 1200, time.Minute, "isp:rl:"),
 		middleware.PerOrgRateLimit(600, time.Minute),
@@ -117,6 +118,17 @@ func (s *Server) routes() {
 	s.mux.Handle("/api/v1/copilot/ask", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleCopilot)))
 	s.mux.Handle("/api/v1/subscriptions/bulk", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleBulkSubs)))
 	s.mux.Handle("/api/v1/crm/leads", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleResource("crm_leads"))))
+	s.mux.Handle("/api/v1/customers/create", middleware.Require(rbac.CustomersWrite)(http.HandlerFunc(s.handleCreateCustomer)))
+	s.mux.Handle("/api/v1/subscriptions/create", middleware.Require(rbac.CustomersWrite)(http.HandlerFunc(s.handleCreateSubscription)))
+	s.mux.Handle("/api/v1/invoices/create", middleware.Require(rbac.BillingWrite)(http.HandlerFunc(s.handleCreateInvoice)))
+	s.mux.Handle("/api/v1/payments/create", middleware.Require(rbac.BillingWrite)(http.HandlerFunc(s.handleCreatePayment)))
+	s.mux.HandleFunc("/api/v1/payments/webhook/{provider}", s.handlePaymentWebhook)
+	s.mux.Handle("/api/v1/radius/users", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleRadiusUsers)))
+	s.mux.HandleFunc("/api/v1/auth/password/change", s.handlePasswordChange)
+	s.mux.Handle("/api/v1/vouchers", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleVouchers)))
+	s.mux.Handle("/api/v1/vouchers/redeem", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleVoucherRedeem)))
+	s.mux.Handle("/api/v1/reports/revenue.csv", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleCSVRevenue)))
+	s.mux.Handle("/api/v1/reports/subscribers.csv", middleware.Require(rbac.BillingRead)(http.HandlerFunc(s.handleCSVSubs)))
 	s.mux.Handle("/api/v1/customer-360", middleware.Require(rbac.CustomersRead)(http.HandlerFunc(s.handleCustomer360)))
 	s.mux.Handle("/api/v1/incidents/action", middleware.Require(rbac.NetworkWrite)(http.HandlerFunc(s.handleIncidentAction)))
 	s.mux.Handle("/api/v1/lab/runs", middleware.Require(rbac.NetworkRead)(http.HandlerFunc(s.handleResource("lab_runs"))))

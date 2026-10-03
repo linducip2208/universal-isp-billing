@@ -20,6 +20,14 @@ httpapi,middleware,events,jobs,workers,health,security,i18n,notify,audit,databas
 Single shared connector registry (`connectors/all`) for API + CLI.
 
 ## IMPLEMENTED FEATURES (with tests)
+- Enterprise write paths (2026-10-03): tenant-scoped POST customers/
+  subscriptions/invoices (server-side totals + numbering)/payments,
+  signature-gated provider webhooks (Xendit/Midtrans, org resolved from
+  reference, 503 without secrets), RADIUS user CRUD (PBKDF2, revoke),
+  password rotation endpoint, API-key auth middleware (scope-checked),
+  SMTP mailer (fake-server tested), vouchers (generate/redeem guarded),
+  RADIUS packet metrics, CSV exports, Pay + New-customer UI — live-tested
+  end-to-end (billing chain incl. double-apply guards).
 - Commercial depth (2026-10-02): persisted Connection Lab evidence
   (`lab_runs`, credentials never stored, history API), Customer 360 composer
   (customer/contacts/addresses/subs/invoices/payments-via-join/tickets),

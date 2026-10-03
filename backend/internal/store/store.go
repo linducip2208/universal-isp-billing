@@ -80,6 +80,8 @@ var resources = map[string]resource{
 	"radius_sessions":  {"radius_sessions", []string{"id", "username", "nas_ip", "framed_ip", "started_at"}, []string{"username", "nas_ip"}, []string{"started_at"}, false},
 	"lab_runs":         {"lab_runs", []string{"id", "vendor", "family", "connection_type", "host", "healthy", "latency_ms", "error", "tested_at"}, []string{"vendor", "host"}, []string{"tested_at"}, false},
 	"crm_leads":        {"crm_leads", []string{"id", "name", "phone", "stage", "quoted_cents", "created_at"}, []string{"name", "phone"}, []string{"created_at"}, true},
+	"radius_users":     {"radius_users", []string{"id", "username", "profile_id", "max_sessions", "expires_at"}, []string{"username"}, []string{"username"}, false},
+	"vouchers":         {"vouchers", []string{"id", "code", "status", "duration_hours", "expires_at", "created_at"}, []string{"code"}, []string{"created_at"}, true},
 }
 
 type Page struct {
