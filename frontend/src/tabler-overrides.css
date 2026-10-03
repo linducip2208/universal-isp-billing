@@ -1,0 +1,16 @@
+/* Minimal app-specific tweaks on top of real Tabler. No design-system overrides. */
+.nav-group-title {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.6;
+  padding: 0.5rem 0.75rem 0.25rem;
+}
+.page-body .card {
+  margin-bottom: 1rem;
+}
+pre.debug {
+  max-height: 320px;
+  overflow: auto;
+  font-size: 0.75rem;
+}

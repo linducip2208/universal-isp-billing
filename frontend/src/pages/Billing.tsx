@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { useLang } from '../lang'
 
-function Table({ rows, cols }: { rows: any[]; cols: string[] }) {
-  if (!rows.length) return <div className="empty">—</div>
+function Tbl({ rows, cols }: { rows: any[]; cols: string[] }) {
+  if (!rows.length) return (
+    <div className="empty"><p className="empty-title">—</p></div>
+  )
   return (
-    <table><thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}>{cols.map(c => <td key={c}>{String(r[c] ?? r[c.toLowerCase()] ?? '')}</td>)}</tr>)}</tbody></table>
+    <div className="table-responsive">
+      <table className="table table-vcenter card-table table-striped">
+        <thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+        <tbody>{rows.map((r, i) => <tr key={i}>{cols.map(c => <td key={c}>{String(r[c] ?? r[c.toLowerCase()] ?? '')}</td>)}</tr>)}</tbody>
+      </table>
+    </div>
   )
 }
 
@@ -30,17 +35,22 @@ export function Invoices() {
     } catch (e: any) { setMsg(String(e.message || e)) }
   }
   return (
-    <div className="page"><h2>Invoices</h2>
-      {msg && <div className="card"><div className="ct">{msg}</div></div>}
+    <div>
+      <h2 className="page-title mb-3">Invoices</h2>
+      {msg && <div className="alert alert-info" role="status">{msg}</div>}
       <div className="card">
-        <table><thead><tr><th>ID</th><th>Status</th><th>Total</th><th>Action</th></tr></thead>
-          <tbody>{rows.map((r: any, i: number) => (
-            <tr key={i}><td>{String(r.id).slice(0, 8)}</td>
-              <td><span className="badge ok">{r.status}</span></td>
-              <td>{String(r.total_cents ?? r.total ?? '')}</td>
-              <td>{r.status !== 'paid' && <button onClick={() => pay(r)}>Pay</button>}</td></tr>
-          ))}</tbody></table>
-        {rows.length === 0 && <div className="empty">—</div>}
+        <div className="table-responsive">
+          <table className="table table-vcenter card-table table-striped">
+            <thead><tr><th>ID</th><th>Status</th><th>Total</th><th>Action</th></tr></thead>
+            <tbody>{rows.map((r: any, i: number) => (
+              <tr key={i}><td>{String(r.id).slice(0, 8)}</td>
+                <td><span className="badge bg-green-lt">{r.status}</span></td>
+                <td>{String(r.total_cents ?? r.total ?? '')}</td>
+                <td>{r.status !== 'paid' && <button className="btn btn-sm" onClick={() => pay(r)}>Pay</button>}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+        {rows.length === 0 && <div className="card-body"><div className="empty"><p className="empty-title">—</p></div></div>}
       </div>
     </div>
   )
@@ -50,9 +60,9 @@ export function Payments() {
   const [rows, setRows] = useState<any[]>([])
   useEffect(() => { api('/api/v1/payments').then(j => setRows(j.data ?? [])).catch(() => {}) }, [])
   return (
-    <div className="page"><h2>Payments</h2>
-      <div className="card"><Table rows={rows} cols={['id', 'status', 'amount']} /></div>
+    <div>
+      <h2 className="page-title mb-3">Payments</h2>
+      <div className="card"><Tbl rows={rows} cols={['id', 'status', 'amount']} /></div>
     </div>
   )
 }
-

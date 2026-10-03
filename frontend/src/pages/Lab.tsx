@@ -25,25 +25,36 @@ export function Lab() {
     } catch (e: any) { setErr(e.message) }
     finally { setBusy(false) }
   }
+  const field = (label: string, node: React.ReactNode) => (
+    <div className="mb-3"><label className="form-label">{label}{node}</label></div>
+  )
   return (
-    <div className="page">
-      <h2>{ctx.t('lab.title')}</h2>
-      <p className="muted">{ctx.t('lab.hint')}</p>
-      {err && <div className="empty">{err}</div>}
-      <form onSubmit={submit} className="card form">
-        <label>{ctx.t('lab.vendor')}<input value={vendor} onChange={e => setVendor(e.target.value)} /></label>
-        <label>{ctx.t('lab.family')}<input value={family} onChange={e => setFamily(e.target.value)} /></label>
-        <label>{ctx.t('lab.conn')}
-          <select value={conn} onChange={e => setConn(e.target.value)}>
-            {['cli', 'rest', 'cloud_api', 'restconf', 'netconf', 'ssh', 'radius', 'snmp', 'webhook', 'generic_http'].map(c => <option key={c} value={c}>{c}</option>)}
-          </select></label>
-        <label>{ctx.t('lab.host')}<input value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" /></label>
-        <label>{ctx.t('lab.user')}<input value={user} onChange={e => setUser(e.target.value)} /></label>
-        <label>{ctx.t('lab.pass')}<input type="password" value={pass} onChange={e => setPass(e.target.value)} /></label>
-        <button type="submit" disabled={busy}>{busy ? '…' : ctx.t('common.test')}</button>
-      </form>
-      {out && <div className="card"><div className="ct">{ctx.t('lab.result')}</div><pre>{JSON.stringify(out, null, 2)}</pre></div>}
+    <div>
+      <h2 className="page-title mb-3">{ctx.t('lab.title')}</h2>
+      <p className="text-secondary">{ctx.t('lab.hint')}</p>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <div className="row row-cards">
+        <div className="col-md-6">
+          <form onSubmit={submit} className="card">
+            <div className="card-body">
+              {field(ctx.t('lab.vendor'), <input className="form-control" value={vendor} onChange={e => setVendor(e.target.value)} />)}
+              {field(ctx.t('lab.family'), <input className="form-control" value={family} onChange={e => setFamily(e.target.value)} />)}
+              {field(ctx.t('lab.conn'),
+                <select className="form-select" value={conn} onChange={e => setConn(e.target.value)}>
+                  {['cli', 'rest', 'cloud_api', 'restconf', 'netconf', 'ssh', 'radius', 'snmp', 'webhook', 'generic_http'].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>)}
+              {field(ctx.t('lab.host'), <input className="form-control" value={host} onChange={e => setHost(e.target.value)} placeholder="192.168.88.1" />)}
+              {field(ctx.t('lab.user'), <input className="form-control" value={user} onChange={e => setUser(e.target.value)} />)}
+              {field(ctx.t('lab.pass'), <input className="form-control" type="password" value={pass} onChange={e => setPass(e.target.value)} />)}
+              <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? '…' : ctx.t('common.test')}</button>
+            </div>
+          </form>
+        </div>
+        <div className="col-md-6">
+          {out && <div className="card"><div className="card-header"><h3 className="card-title">{ctx.t('lab.result')}</h3></div>
+            <div className="card-body"><pre className="debug">{JSON.stringify(out, null, 2)}</pre></div></div>}
+        </div>
+      </div>
     </div>
   )
 }
-

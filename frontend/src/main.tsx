@@ -14,6 +14,9 @@ import { Copilot, ServiceHealth, Economics } from './pages/Ops'
 import { Customers } from './pages/Customers'
 import { Customer360, DeviceDetail, Incidents } from './pages/Premium'
 import { useLang } from './lang'
+import tablerLtr from '@tabler/core/dist/css/tabler.min.css?url'
+import tablerRtl from '@tabler/core/dist/css/tabler.rtl.min.css?url'
+import './tabler-overrides.css'
 
 const groups: { title: string; items: { to: string; key: string }[] }[] = [
   { title: 'DASHBOARD', items: [{ to: '/', key: 'nav.dashboard' }, { to: '/noc', key: 'nav.noc' }] },
@@ -34,54 +37,100 @@ function Shell() {
   const ctx: any = useContext(LangCtx)
   const authed = !!localStorage.getItem('isp_token')
   function logout() { localStorage.removeItem('isp_token'); location.hash = '#/login' }
+  React.useEffect(() => {
+    document.documentElement.setAttribute('data-bs-theme', dark ? 'dark' : 'light')
+  }, [dark])
   return (
-    <div className={dark ? 'app dark' : 'app'}>
-      <aside className="sidebar">
-        <div className="brand">Universal ISP</div>
-        {groups.map(g => (
-          <div key={g.title}><div className="gtitle">{g.title}</div>
-            {g.items.map(it => (
-              <Link key={it.to} to={it.to} className={loc.pathname === it.to ? 'nav active' : 'nav'}>{ctx.t(it.key)}</Link>
-            ))}
+    <div className="page">
+      <aside className="navbar navbar-vertical navbar-expand-lg navbar-dark">
+        <div className="container-fluid">
+          <h1 className="navbar-brand navbar-brand-autodark">
+            <span className="navbar-brand-text">Universal ISP</span>
+          </h1>
+          <div className="navbar-collapse">
+            <ul className="navbar-nav">
+              {groups.map(g => (
+                <li className="nav-item" key={g.title}>
+                  <div className="nav-link nav-group-title">{g.title}</div>
+                  <ul className="navbar-nav">
+                    {g.items.map(it => (
+                      <li className="nav-item" key={it.to}>
+                        <Link to={it.to} className={loc.pathname === it.to ? 'nav-link active' : 'nav-link'}>
+                          <span className="nav-link-title">{ctx.t(it.key)}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
           </div>
-        ))}
+        </div>
       </aside>
-      <main className="main">
-        <header className="topbar">
-          <strong>{ctx.t('noc.title')}</strong>
-          <span className="sp" />
-          {!authed
-            ? <Link to="/login">{ctx.t('auth.login')}</Link>
-            : <button onClick={logout}>{ctx.t('auth.logout')}</button>}
-          <button onClick={() => ctx.setLang(ctx.lang === 'en' ? 'id' : ctx.lang === 'id' ? 'ar' : 'en')}>{ctx.lang.toUpperCase()}</button>
-          <button onClick={() => setDark(!dark)}>{dark ? '☀' : '☾'}</button>
+      <div className="page-wrapper">
+        <header className="page-header d-print-none">
+          <div className="container-xl">
+            <div className="row g-2 align-items-center">
+              <div className="col">
+                <h2 className="page-title">{ctx.t('noc.title')}</h2>
+              </div>
+              <div className="col-auto ms-auto d-print-none">
+                <div className="btn-list">
+                  {!authed
+                    ? <Link to="/login" className="btn">{ctx.t('auth.login')}</Link>
+                    : <button className="btn" onClick={logout}>{ctx.t('auth.logout')}</button>}
+                  <button className="btn btn-icon" onClick={() => ctx.setLang(ctx.lang === 'en' ? 'id' : ctx.lang === 'id' ? 'ar' : 'en')} title="language">{ctx.lang.toUpperCase()}</button>
+                  <button className="btn btn-icon" onClick={() => setDark(!dark)} title="theme">{dark ? '☀' : '☾'}</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </header>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/noc" element={<NOC />} />
-          <Route path="/connectors" element={<Connectors />} />
-          <Route path="/matrix" element={<Matrix />} />
-          <Route path="/lab" element={<Lab />} />
-          <Route path="/invoices" element={<Invoices />} />
-          <Route path="/payments" element={<Payments />} />
-          <Route path="/copilot" element={<Copilot />} />
-          <Route path="/health" element={<ServiceHealth />} />
-          <Route path="/economics" element={<Economics />} />
-          <Route path="/customer360" element={<Customer360 />} />
-          <Route path="/device" element={<DeviceDetail />} />
-          <Route path="/incidents" element={<Incidents />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/" element={<Page k="nav.dashboard" />} />
-          <Route path="*" element={<Page k={loc.pathname} />} />
-        </Routes>
-      </main>
+        <div className="page-body">
+          <div className="container-xl">
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/noc" element={<NOC />} />
+              <Route path="/connectors" element={<Connectors />} />
+              <Route path="/matrix" element={<Matrix />} />
+              <Route path="/lab" element={<Lab />} />
+              <Route path="/invoices" element={<Invoices />} />
+              <Route path="/payments" element={<Payments />} />
+              <Route path="/copilot" element={<Copilot />} />
+              <Route path="/health" element={<ServiceHealth />} />
+              <Route path="/economics" element={<Economics />} />
+              <Route path="/customer360" element={<Customer360 />} />
+              <Route path="/device" element={<DeviceDetail />} />
+              <Route path="/incidents" element={<Incidents />} />
+              <Route path="/customers" element={<Customers />} />
+              <Route path="/" element={<Page k="nav.dashboard" />} />
+              <Route path="*" element={<Page k={loc.pathname} />} />
+            </Routes>
+          </div>
+        </div>
+      </div>
     </div>
   )
+}
+
+function useTablerCSS(rtl: boolean) {
+  React.useEffect(() => {
+    const id = 'tabler-css'
+    document.getElementById(id)?.remove()
+    const link = document.createElement('link')
+    link.id = id
+    link.rel = 'stylesheet'
+    link.href = rtl ? tablerRtl : tablerLtr
+    document.head.appendChild(link)
+    return () => { document.getElementById(id)?.remove() }
+  }, [rtl])
 }
 
 function App() {
   const [lang, setLang] = useState<Lang>('en')
   const t = (k: string) => translate(lang, k)
+  const rtl = dirOf(lang) === 'rtl'
+  useTablerCSS(rtl)
   React.useEffect(() => {
     document.documentElement.dir = dirOf(lang)
     document.documentElement.lang = lang

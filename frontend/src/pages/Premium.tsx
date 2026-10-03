@@ -4,11 +4,15 @@ import { api } from '../api/client'
 function Sec({ title, rows, cols }: { title: string; rows: any[]; cols: string[] }) {
   if (!rows || !rows.length) return null
   return (
-    <div className="card"><div className="ct">{title} ({rows.length})</div>
-      <table><thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
-        <tbody>{rows.map((r: any, i: number) => (
-          <tr key={i}>{cols.map(c => <td key={c}>{String(r[c] ?? '')}</td>)}</tr>
-        ))}</tbody></table>
+    <div className="card mb-3"><div className="card-header"><h3 className="card-title">{title} ({rows.length})</h3></div>
+      <div className="table-responsive">
+        <table className="table table-vcenter card-table table-striped">
+          <thead><tr>{cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+          <tbody>{rows.map((r: any, i: number) => (
+            <tr key={i}>{cols.map(c => <td key={c}>{String(r[c] ?? '')}</td>)}</tr>
+          ))}</tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -23,13 +27,19 @@ export function Customer360() {
     catch (e: any) { setErr(String(e.message || e)) }
   }
   return (
-    <div className="page"><h2>Customer 360</h2>
-      {err && <div className="empty">{err}</div>}
-      <form onSubmit={go} className="card form">
-        <label>Customer ID<input value={id} onChange={e => setId(e.target.value)} placeholder="uuid — pick from Customers list" /></label>
-        <button>Load</button>
+    <div>
+      <h2 className="page-title mb-3">Customer 360</h2>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <form onSubmit={go} className="card mb-3">
+        <div className="card-body">
+          <div className="mb-3"><label className="form-label">Customer ID
+            <input className="form-control" value={id} onChange={e => setId(e.target.value)} placeholder="uuid — pick from Customers list" />
+          </label></div>
+          <button className="btn btn-primary">Load</button>
+        </div>
       </form>
-      {d && <div className="card"><div className="ct">Customer</div><pre>{JSON.stringify(d.customer, null, 2)}</pre></div>}
+      {d && <div className="card mb-3"><div className="card-header"><h3 className="card-title">Customer</h3></div>
+        <div className="card-body"><pre className="debug">{JSON.stringify(d.customer, null, 2)}</pre></div></div>}
       {d && <>
         <Sec title="Subscriptions" rows={d.subscriptions} cols={['username', 'service', 'status']} />
         <Sec title="Invoices" rows={d.invoices} cols={['id', 'status']} />
@@ -50,20 +60,28 @@ export function DeviceDetail() {
   async function go(e: React.FormEvent) {
     e.preventDefault(); setErr(''); setD(null); setRuns([])
     try {
-      setD(await api(`/api/v1/devices?id=${encodeURIComponent(id)}`))
+      const dev = await api(`/api/v1/devices?id=${encodeURIComponent(id)}`)
+      setD(dev)
       const r = await api('/api/v1/lab/runs?per_page=5')
-      setRuns((r.data ?? []).filter((x: any) => x.host === d?.host))
+      setRuns((r.data ?? []).filter((x: any) => x.host === dev?.host))
     } catch (e: any) { setErr(String(e.message || e)) }
   }
   return (
-    <div className="page"><h2>Device Detail</h2>
-      {err && <div className="empty">{err}</div>}
-      <form onSubmit={go} className="card form">
-        <label>Device ID<input value={id} onChange={e => setId(e.target.value)} placeholder="uuid — pick from Devices list" /></label>
-        <button>Load</button>
+    <div>
+      <h2 className="page-title mb-3">Device Detail</h2>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      <form onSubmit={go} className="card mb-3">
+        <div className="card-body">
+          <div className="mb-3"><label className="form-label">Device ID
+            <input className="form-control" value={id} onChange={e => setId(e.target.value)} placeholder="uuid — pick from Devices list" />
+          </label></div>
+          <button className="btn btn-primary">Load</button>
+        </div>
       </form>
-      {d && <div className="card"><div className="ct">Overview</div><pre>{JSON.stringify(d, null, 2)}</pre></div>}
-      {runs.length > 0 && <div className="card"><div className="ct">Recent lab evidence</div><pre>{JSON.stringify(runs, null, 2)}</pre></div>}
+      {d && <div className="card mb-3"><div className="card-header"><h3 className="card-title">Overview</h3></div>
+        <div className="card-body"><pre className="debug">{JSON.stringify(d, null, 2)}</pre></div></div>}
+      {runs.length > 0 && <div className="card"><div className="card-header"><h3 className="card-title">Recent lab evidence</h3></div>
+        <div className="card-body"><pre className="debug">{JSON.stringify(runs, null, 2)}</pre></div></div>}
     </div>
   )
 }
@@ -88,21 +106,28 @@ export function Incidents() {
     } catch (e: any) { setErr(String(e.message || e)) }
   }
   return (
-    <div className="page"><h2>Incidents</h2>
-      {err && <div className="empty">{err}</div>}
-      {msg && <div className="card"><div className="ct">{msg}</div></div>}
-      {rows.length === 0 && !err && <div className="empty">No incidents — empty state.</div>}
+    <div>
+      <h2 className="page-title mb-3">Incidents</h2>
+      {err && <div className="alert alert-danger" role="alert">{err}</div>}
+      {msg && <div className="alert alert-info" role="status">{msg}</div>}
+      {rows.length === 0 && !err && (
+        <div className="empty"><p className="empty-title">No incidents</p><p className="empty-subtitle">Empty state.</p></div>
+      )}
       {rows.length > 0 && <div className="card">
-        <table><thead><tr><th>Title</th><th>Severity</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>{rows.map((r: any) => (
-            <tr key={r.id}><td>{r.title}</td>
-              <td><span className="badge ok">{r.severity}</span></td><td>{r.status}</td>
-              <td>
-                <button onClick={() => act(r.id, 'ack')}>Ack</button>{' '}
-                <button onClick={() => act(r.id, 'assign')}>Assign</button>{' '}
-                <button onClick={() => act(r.id, 'resolve')}>Resolve</button>
-              </td></tr>
-          ))}</tbody></table>
+        <div className="table-responsive">
+          <table className="table table-vcenter card-table table-striped">
+            <thead><tr><th>Title</th><th>Severity</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>{rows.map((r: any) => (
+              <tr key={r.id}><td>{r.title}</td>
+                <td><span className="badge bg-red-lt">{r.severity}</span></td><td>{r.status}</td>
+                <td>
+                  <button className="btn btn-sm me-1" onClick={() => act(r.id, 'ack')}>Ack</button>
+                  <button className="btn btn-sm me-1" onClick={() => act(r.id, 'assign')}>Assign</button>
+                  <button className="btn btn-sm" onClick={() => act(r.id, 'resolve')}>Resolve</button>
+                </td></tr>
+            ))}</tbody>
+          </table>
+        </div>
       </div>}
     </div>
   )

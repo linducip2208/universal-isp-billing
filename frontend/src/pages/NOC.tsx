@@ -20,13 +20,9 @@ export function NOC() {
     return () => { stop = true; clearInterval(id) }
   }, [])
   if (!d) {
-    return (
-      <div className="page"><h2>{ctx.t('nav.noc')}</h2>
-        {err
-          ? <div className="empty">{ctx.t('noc.offline')}: {err}</div>
-          : <div className="card skeleton">Loading…</div>}
-      </div>
-    )
+    return err
+      ? <div className="alert alert-warning" role="alert">{ctx.t('noc.offline')}: {err}</div>
+      : <div className="card"><div className="card-body"><div className="placeholder-glow"><span className="placeholder col-12" /></div></div></div>
   }
   const cards: [string, number][] = [
     ['Devices online', d.online_devices ?? 0], ['Devices offline', d.offline_devices ?? 0],
@@ -40,25 +36,33 @@ export function NOC() {
   ]
   const max = Math.max(1, ...dist.map(x => x[1] as number))
   return (
-    <div className="page">
-      <h2>{ctx.t('nav.noc')} — {live ? ctx.t('noc.live') : ctx.t('noc.offline')}</h2>
-      <div className="cards">
-        {cards.map(([k, v]) => <div className="card" key={k}><div className="ct">{k}</div><div className="cv">{v}</div></div>)}
+    <div>
+      <div className="mb-2 text-secondary">{ctx.t('nav.noc')} — {live ? ctx.t('noc.live') : ctx.t('noc.offline')}</div>
+      <div className="row row-deck row-cards mb-3">
+        {cards.map(([k, v]) => (
+          <div className="col-sm-6 col-lg-2" key={k}>
+            <div className="card"><div className="card-body">
+              <div className="subheader">{k}</div><div className="h1 mb-0">{v}</div>
+            </div></div>
+          </div>
+        ))}
       </div>
-      <div className="card">
-        <div className="ct">Device status (live)</div>
-        <svg width="100%" height={dist.length * 30 + 10} role="img">
-          {dist.map(([k, v, c], i) => (
-            <g key={k}>
-              <text x="0" y={i * 30 + 20} fontSize="12" fill="currentColor">{k}</text>
-              <rect x="90" y={i * 30 + 6} width={`${(Number(v) / max) * 60}%`} height="16" fill={String(c)} rx="4" />
-              <text x="92%" y={i * 30 + 20} fontSize="12" fill="currentColor" textAnchor="end">{v}</text>
-            </g>
-          ))}
-        </svg>
+      <div className="card mb-3">
+        <div className="card-header"><h3 className="card-title">Device status (live)</h3></div>
+        <div className="card-body">
+          <svg width="100%" height={dist.length * 30 + 10} role="img">
+            {dist.map(([k, v, c], i) => (
+              <g key={k}>
+                <text x="0" y={i * 30 + 20} fontSize="12" fill="currentColor">{k}</text>
+                <rect x="90" y={i * 30 + 6} width={`${(Number(v) / max) * 60}%`} height="16" fill={String(c)} rx="4" />
+                <text x="92%" y={i * 30 + 20} fontSize="12" fill="currentColor" textAnchor="end">{v}</text>
+              </g>
+            ))}
+          </svg>
+        </div>
       </div>
-      <div className="card"><div className="ct">GET /api/v1/noc/summary</div><pre>{JSON.stringify(d, null, 2)}</pre></div>
+      <div className="card"><div className="card-header"><h3 className="card-title">GET /api/v1/noc/summary</h3></div>
+        <div className="card-body"><pre className="debug">{JSON.stringify(d, null, 2)}</pre></div></div>
     </div>
   )
 }
-

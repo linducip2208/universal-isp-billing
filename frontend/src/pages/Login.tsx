@@ -23,16 +23,29 @@ export function Login() {
     }
   }
   return (
-    <div className="page narrow">
-      <h2>{ctx.t('auth.login')}</h2>
-      <p className="muted">{ctx.t('auth.required')}</p>
-      {err && <div className="empty">{err}</div>}
-      <form onSubmit={submit} className="card form">
-        <label>{ctx.t('auth.username')}<input value={u} onChange={e => setU(e.target.value)} /></label>
-        <label>{ctx.t('auth.password')}<input type="password" value={p} onChange={e => setP(e.target.value)} /></label>
-        <button type="submit">{ctx.t('auth.login')}</button>
-      </form>
+    <div className="row justify-content-center">
+      <div className="col-md-6 col-lg-4">
+        <div className="card card-md">
+          <div className="card-body">
+            <h2 className="card-title text-center mb-4">{ctx.t('auth.login')}</h2>
+            <p className="text-secondary text-center">{ctx.t('auth.required')}</p>
+            {err && <div className="alert alert-danger" role="alert">{err}</div>}
+            <form onSubmit={submit}>
+              <div className="mb-3">
+                <label className="form-label">{ctx.t('auth.username')}
+                  <input className="form-control" value={u} onChange={e => setU(e.target.value)} />
+                </label>
+              </div>
+              <div className="mb-3">
+                <label className="form-label">{ctx.t('auth.password')}
+                  <input className="form-control" type="password" value={p} onChange={e => setP(e.target.value)} />
+                </label>
+              </div>
+              <button className="btn btn-primary w-100" type="submit">{ctx.t('auth.login')}</button>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
-

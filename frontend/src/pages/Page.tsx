@@ -42,40 +42,50 @@ export function Page({ k }: { k: string }) {
 
   if (!route) {
     return (
-      <div className="page"><h2>{k}</h2>
-        <div className="empty">Module API not wired yet — tracked as PLANNED, no fake data shown.</div>
+      <div className="empty">
+        <p className="empty-title">{k}</p>
+        <p className="empty-subtitle">Module API not wired yet — tracked as PLANNED, no fake data shown.</p>
       </div>
     )
   }
   return (
-    <div className="page">
-      <h2>{k}</h2>
-      <div className="toolbar">
-        <input placeholder="Search" value={search} onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { setPage(1); setQ(search) } }} />
-        <button onClick={() => { setPage(1); setQ(search) }}>Search</button>
+    <div>
+      <div className="card mb-3">
+        <div className="card-body">
+          <div className="d-flex gap-2">
+            <input className="form-control" placeholder="Search" value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { setPage(1); setQ(search) } }} />
+            <button className="btn" onClick={() => { setPage(1); setQ(search) }}>Search</button>
+          </div>
+        </div>
       </div>
-      {loading && <div className="card skeleton">Loading…</div>}
-      {!loading && err && <div className="empty">API error: {err} (empty state — nothing fabricated)</div>}
-      {!loading && !err && rows.length === 0 && <div className="empty">No data — empty state.</div>}
+      {loading && <div className="card"><div className="card-body"><div className="placeholder-glow"><span className="placeholder col-12" /></div></div></div>}
+      {!loading && err && <div className="alert alert-warning" role="alert">API error: {err} (empty state — nothing fabricated)</div>}
+      {!loading && !err && rows.length === 0 && (
+        <div className="empty"><p className="empty-title">No data</p><p className="empty-subtitle">Empty state.</p></div>
+      )}
       {!loading && !err && rows.length > 0 && (
         <div className="card">
-          <table><thead><tr>{route.cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
-            <tbody>{rows.map((r: any, i: number) => (
-              <tr key={i}>{route.cols.map(c => (
-                <td key={c}>{c === 'status' || c === 'severity'
-                  ? <span className="badge ok">{String(r[c] ?? '')}</span>
-                  : String(r[c] ?? '')}</td>
-              ))}</tr>
-            ))}</tbody></table>
-          <div className="pager">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
+          <div className="table-responsive">
+            <table className="table table-vcenter card-table table-striped">
+              <thead><tr>{route.cols.map(c => <th key={c}>{c}</th>)}</tr></thead>
+              <tbody>{rows.map((r: any, i: number) => (
+                <tr key={i}>{route.cols.map(c => (
+                  <td key={c}>{c === 'status' || c === 'severity'
+                    ? <span className="badge bg-green-lt">{String(r[c] ?? '')}</span>
+                    : String(r[c] ?? '')}</td>
+                ))}</tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <div className="card-footer d-flex align-items-center gap-2">
+            <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>‹</button>
             <span>{page} / {Math.max(1, Math.ceil(total / 15))} ({total})</span>
-            <button disabled={page * 15 >= total} onClick={() => setPage(p => p + 1)}>›</button>
+            <button className="btn btn-sm" disabled={page * 15 >= total} onClick={() => setPage(p => p + 1)}>›</button>
           </div>
         </div>
       )}
     </div>
   )
 }
-

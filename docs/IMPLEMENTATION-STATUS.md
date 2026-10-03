@@ -20,6 +20,11 @@ httpapi,middleware,events,jobs,workers,health,security,i18n,notify,audit,databas
 Single shared connector registry (`connectors/all`) for API + CLI.
 
 ## IMPLEMENTED FEATURES (with tests)
+- Real Tabler UI (2026-10-03): `@tabler/core` + `@tabler/icons-react` via npm
+  (bundled by Vite, no CDN): vertical navbar layout, page header/wrapper,
+  cards, striped tables, badges, forms, alerts, empty states, skeletons;
+  dark mode via `data-bs-theme`, LTR/RTL stylesheets swapped per language.
+  All pages rewritten to Tabler classes; 16 frontend tests green.
 - Enterprise write paths (2026-10-03): tenant-scoped POST customers/
   subscriptions/invoices (server-side totals + numbering)/payments,
   signature-gated provider webhooks (Xendit/Midtrans, org resolved from

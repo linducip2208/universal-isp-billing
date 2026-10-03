@@ -1,6 +1,28 @@
 import React, { useState } from 'react'
 import { api } from '../api/client'
 
+function FormCard({ title, hint, children, onSubmit, busy, submit }: {
+  title: string; hint?: string; children: React.ReactNode;
+  onSubmit: (e: React.FormEvent) => void; busy?: boolean; submit: string;
+}) {
+  return (
+    <div>
+      <h2 className="page-title mb-3">{title}</h2>
+      {hint && <p className="text-secondary">{hint}</p>}
+      <form onSubmit={onSubmit} className="card">
+        <div className="card-body">{children}
+          <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? '…' : submit}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+const F = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="mb-3"><label className="form-label">{label}{children}</label></div>
+)
+const I = (p: React.InputHTMLAttributes<HTMLInputElement>) => <input className="form-control" {...p} />
+
 export function Copilot() {
   const [q, setQ] = useState('')
   const [ans, setAns] = useState<any>(null)
@@ -14,14 +36,14 @@ export function Copilot() {
     finally { setBusy(false) }
   }
   return (
-    <div className="page"><h2>AI Copilot (read-only)</h2>
-      <p className="muted">Answers cite evidence. It cannot execute actions — proposals only.</p>
-      {err && <div className="empty">{err}</div>}
-      <form onSubmit={ask} className="card form">
-        <label>Question<input value={q} onChange={e => setQ(e.target.value)} placeholder="any subscriber sessions down?" /></label>
-        <button disabled={busy}>{busy ? '…' : 'Ask'}</button>
-      </form>
-      {ans && <div className="card"><div className="ct">Answer</div><pre>{JSON.stringify(ans, null, 2)}</pre></div>}
+    <div>
+      <FormCard title="AI Copilot (read-only)" hint="Answers cite evidence. It cannot execute actions — proposals only."
+        onSubmit={ask} busy={busy} submit="Ask">
+        <F label="Question"><I value={q} onChange={e => setQ(e.target.value)} placeholder="any subscriber sessions down?" /></F>
+      </FormCard>
+      {err && <div className="alert alert-danger mt-3" role="alert">{err}</div>}
+      {ans && <div className="card mt-3"><div className="card-header"><h3 className="card-title">Answer</h3></div>
+        <div className="card-body"><pre className="debug">{JSON.stringify(ans, null, 2)}</pre></div></div>}
     </div>
   )
 }
@@ -36,18 +58,21 @@ export function ServiceHealth() {
     catch (e: any) { setErr(String(e.message || e)) }
   }
   return (
-    <div className="page"><h2>Service Health</h2>
-      {err && <div className="empty">{err}</div>}
-      <form onSubmit={go} className="card form">
-        <label>Subscription ID<input value={sub} onChange={e => setSub(e.target.value)} /></label>
-        <button>Check</button>
-      </form>
-      {rep && <div className="card">
-        <div className="ct">Overall: <span className="badge ok">{rep.overall}</span></div>
-        <table><thead><tr><th>Source</th><th>Status</th><th>Detail</th></tr></thead>
-          <tbody>{(rep.sections ?? []).map((s: any, i: number) => (
-            <tr key={i}><td>{s.source}</td><td><span className="badge ok">{s.status}</span></td><td>{s.detail}</td></tr>
-          ))}</tbody></table>
+    <div>
+      <FormCard title="Service Health" onSubmit={go} submit="Check">
+        <F label="Subscription ID"><I value={sub} onChange={e => setSub(e.target.value)} /></F>
+      </FormCard>
+      {err && <div className="alert alert-danger mt-3" role="alert">{err}</div>}
+      {rep && <div className="card mt-3">
+        <div className="card-header"><h3 className="card-title">Overall: <span className="badge bg-green-lt">{rep.overall}</span></h3></div>
+        <div className="table-responsive">
+          <table className="table table-vcenter card-table">
+            <thead><tr><th>Source</th><th>Status</th><th>Detail</th></tr></thead>
+            <tbody>{(rep.sections ?? []).map((s: any, i: number) => (
+              <tr key={i}><td>{s.source}</td><td><span className="badge bg-green-lt">{s.status}</span></td><td>{s.detail}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
       </div>}
     </div>
   )
@@ -59,17 +84,21 @@ export function Economics() {
   React.useEffect(() => {
     api('/api/v1/economics/summary').then(setD).catch((e: any) => setErr(String(e.message || e)))
   }, [])
+  if (err) return <div className="alert alert-danger" role="alert">{err}</div>
+  if (!d) return <div className="card"><div className="card-body"><div className="placeholder-glow"><span className="placeholder col-12" /></div></div></div>
   return (
-    <div className="page"><h2>Network Economics</h2>
-      {err && <div className="empty">{err}</div>}
-      {!d && !err && <div className="card skeleton">Loading…</div>}
-      {d && <div className="cards">
-        <div className="card"><div className="ct">MRR (cents)</div><div className="cv">{d.mrr_cents}</div></div>
-        <div className="card"><div className="ct">ARPU (cents)</div><div className="cv">{d.arpu_cents}</div></div>
-        <div className="card"><div className="ct">Active subs</div><div className="cv">{d.active_subs}</div></div>
-      </div>}
-      {d && <div className="card"><pre>{JSON.stringify(d, null, 2)}</pre></div>}
+    <div>
+      <h2 className="page-title mb-3">Network Economics</h2>
+      <div className="row row-deck row-cards mb-3">
+        {[['MRR (cents)', d.mrr_cents], ['ARPU (cents)', d.arpu_cents], ['Active subs', d.active_subs]].map(([k, v]) => (
+          <div className="col-sm-6 col-lg-4" key={String(k)}>
+            <div className="card"><div className="card-body">
+              <div className="subheader">{k}</div><div className="h1 mb-0">{v}</div>
+            </div></div>
+          </div>
+        ))}
+      </div>
+      <div className="card"><div className="card-body"><pre className="debug">{JSON.stringify(d, null, 2)}</pre></div></div>
     </div>
   )
 }
-

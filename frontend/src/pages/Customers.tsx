@@ -25,26 +25,37 @@ export function Customers() {
     } catch (e: any) { setMsg(String(e.message || e)) }
   }
   return (
-    <div className="page"><h2>Customers</h2>
-      {msg && <div className="card"><div className="ct">{msg}</div></div>}
-      <form onSubmit={create} className="card form">
-        <label>Name<input value={name} onChange={e => setName(e.target.value)} required /></label>
-        <label>Email<input value={email} onChange={e => setEmail(e.target.value)} /></label>
-        <label>Phone<input value={phone} onChange={e => setPhone(e.target.value)} /></label>
-        <button>Add customer</button>
+    <div>
+      <h2 className="page-title mb-3">Customers</h2>
+      {msg && <div className="alert alert-info" role="status">{msg}</div>}
+      <form onSubmit={create} className="card mb-3">
+        <div className="card-body">
+          <div className="row g-2">
+            <div className="col-md-4"><label className="form-label">Name<input className="form-control" value={name} onChange={e => setName(e.target.value)} required /></label></div>
+            <div className="col-md-4"><label className="form-label">Email<input className="form-control" value={email} onChange={e => setEmail(e.target.value)} /></label></div>
+            <div className="col-md-3"><label className="form-label">Phone<input className="form-control" value={phone} onChange={e => setPhone(e.target.value)} /></label></div>
+            <div className="col-md-1 d-flex align-items-end"><button className="btn btn-primary">Add customer</button></div>
+          </div>
+        </div>
       </form>
-      <div className="toolbar">
-        <input placeholder="Search" value={q} onChange={e => setQ(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') load(q) }} />
-        <button onClick={() => load(q)}>Search</button>
-      </div>
+      <div className="card mb-3"><div className="card-body">
+        <div className="d-flex gap-2">
+          <input className="form-control" placeholder="Search" value={q} onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') load(q) }} />
+          <button className="btn" onClick={() => load(q)}>Search</button>
+        </div>
+      </div></div>
       <div className="card">
-        <table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th></tr></thead>
-          <tbody>{rows.map((r: any, i: number) => (
-            <tr key={i}><td>{r.name}</td><td>{r.email}</td><td>{r.phone}</td>
-              <td><span className="badge ok">{r.status}</span></td></tr>
-          ))}</tbody></table>
-        {rows.length === 0 && <div className="empty">No customers — empty state.</div>}
+        <div className="table-responsive">
+          <table className="table table-vcenter card-table table-striped">
+            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Status</th></tr></thead>
+            <tbody>{rows.map((r: any, i: number) => (
+              <tr key={i}><td>{r.name}</td><td>{r.email}</td><td>{r.phone}</td>
+                <td><span className="badge bg-green-lt">{r.status}</span></td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+        {rows.length === 0 && <div className="card-body"><div className="empty"><p className="empty-title">No customers</p><p className="empty-subtitle">Empty state.</p></div></div>}
       </div>
     </div>
   )
